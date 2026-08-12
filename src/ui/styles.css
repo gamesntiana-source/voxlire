@@ -1,0 +1,395 @@
+/*
+ * styles.css — habillage.
+ *
+ * Contrainte de départ : on lit des livres, souvent le soir, souvent d'une
+ * main, sur un téléphone. D'où le fond sombre et chaud plutôt que noir pur
+ * (moins de fatigue qu'un contraste maximal), les commandes en bas de
+ * l'écran là où va le pouce, et une seule chose surlignée à la fois.
+ */
+
+:root {
+  --fond: #12100e;
+  --fond-releve: #1c1917;
+  --fond-panneau: #17140f;
+  --trait: #2f2a24;
+  --texte: #e8e2d8;
+  --texte-doux: #a09a90;
+  --accent: #d9a441;
+  --accent-doux: #3a2e18;
+  --lu: #6b6459;
+  --rayon: 14px;
+  --hauteur-lecteur: 132px;
+  color-scheme: dark;
+}
+
+body.clair {
+  --fond: #faf7f1;
+  --fond-releve: #fffdf8;
+  --fond-panneau: #fffdf8;
+  --trait: #e3ddd0;
+  --texte: #26221c;
+  --texte-doux: #6c655a;
+  --accent: #9a6b12;
+  --accent-doux: #f6ecd6;
+  --lu: #a9a294;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--fond);
+  color: var(--texte);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* --- Vues ---------------------------------------------------------------- */
+
+.vue { display: none; flex-direction: column; height: 100dvh; }
+body[data-vue="bibliotheque"] #vue-bibliotheque,
+body[data-vue="lecture"] #vue-lecture { display: flex; }
+
+.entete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: max(10px, env(safe-area-inset-top)) 10px 10px;
+  border-bottom: 1px solid var(--trait);
+  background: var(--fond);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.marque {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 auto 0 10px;
+}
+
+.entete-titre {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.titre-lecture {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sous-titre { display: block; font-size: 12px; color: var(--texte-doux); }
+
+.contenu { flex: 1; overflow-y: auto; padding: 18px 16px 40px; }
+
+/* --- Boutons ------------------------------------------------------------- */
+
+button { font: inherit; color: inherit; cursor: pointer; }
+
+.bouton-icone {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--texte);
+  transition: background 0.15s;
+}
+.bouton-icone:active { background: var(--fond-releve); }
+.bouton-icone svg { width: 22px; height: 22px; }
+.bouton-icone:disabled { opacity: 0.3; }
+
+.bouton-large {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  background: var(--fond-releve);
+}
+.bouton-large:active { border-color: var(--accent); }
+.bouton-titre { display: block; font-size: 16px; font-weight: 600; }
+.bouton-sous { display: block; font-size: 13px; color: var(--texte-doux); margin-top: 3px; }
+
+.bouton-primaire, .bouton-secondaire {
+  padding: 11px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--trait);
+  background: var(--fond-releve);
+  font-size: 15px;
+}
+.bouton-primaire { background: var(--accent); border-color: var(--accent); color: #1a1408; font-weight: 600; }
+.bouton-secondaire:active { border-color: var(--accent); }
+
+/* --- Bibliothèque -------------------------------------------------------- */
+
+.titre-section {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--texte-doux);
+  margin: 28px 0 10px;
+  font-weight: 600;
+}
+
+.liste-livres { list-style: none; margin: 0; padding: 0; }
+
+.livre {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 4px;
+  border-bottom: 1px solid var(--trait);
+}
+.livre-corps { flex: 1; min-width: 0; }
+.livre-titre {
+  display: block;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+.livre-detail { font-size: 12.5px; color: var(--texte-doux); margin-top: 3px; }
+.livre-jauge { height: 3px; border-radius: 2px; background: var(--trait); margin-top: 8px; overflow: hidden; }
+.livre-jauge span { display: block; height: 100%; background: var(--accent); }
+
+.vide { color: var(--texte-doux); font-size: 14px; padding: 10px 4px; }
+
+/* --- Texte lu ------------------------------------------------------------ */
+
+.texte {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 20px calc(var(--hauteur-lecteur) + 30px);
+  font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  font-size: var(--taille-texte, 19px);
+  line-height: 1.75;
+  color: var(--texte-doux);
+  outline: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.texte p { margin: 0 0 1.1em; }
+
+.phrase {
+  transition: color 0.2s, background 0.2s;
+  border-radius: 4px;
+  padding: 0 1px;
+}
+.phrase.lue { color: var(--lu); }
+.phrase.courante {
+  color: var(--texte);
+  background: var(--accent-doux);
+  box-shadow: 0 0 0 3px var(--accent-doux);
+}
+
+/* --- Lecteur ------------------------------------------------------------- */
+
+.lecteur {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 18px max(14px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--fond) 68%, transparent);
+  border-top: 1px solid var(--trait);
+  backdrop-filter: blur(8px);
+}
+
+.progression { margin-bottom: 8px; }
+
+.barre {
+  height: 4px;
+  border-radius: 3px;
+  background: var(--trait);
+  overflow: hidden;
+  cursor: pointer;
+}
+.barre-remplie { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.25s linear; }
+
+.temps {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--texte-doux);
+  margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.commandes { display: flex; align-items: center; justify-content: center; gap: 26px; }
+
+.bouton-lecture {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #1a1408;
+}
+.bouton-lecture svg { width: 28px; height: 28px; }
+.bouton-lecture .icone-pause { display: none; }
+body.joue .bouton-lecture .icone-lire { display: none; }
+body.joue .bouton-lecture .icone-pause { display: block; }
+.bouton-lecture:disabled { opacity: 0.45; }
+
+/* --- Panneaux ------------------------------------------------------------ */
+
+.voile {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 20;
+}
+
+.panneau {
+  position: fixed;
+  inset: auto 0 0 0;
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--fond-panneau);
+  border-top: 1px solid var(--trait);
+  border-radius: 20px 20px 0 0;
+  z-index: 21;
+  animation: monter 0.22s ease-out;
+}
+
+@keyframes monter { from { transform: translateY(100%); } }
+
+@media (min-width: 720px) {
+  .panneau { inset: 0 0 0 auto; width: 400px; border-radius: 0; max-height: none; animation: none; }
+}
+
+.panneau-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 10px 14px 20px;
+  border-bottom: 1px solid var(--trait);
+}
+.panneau-entete h2 { margin: 0; font-size: 17px; }
+
+.panneau-corps { overflow-y: auto; padding: 18px 20px max(28px, env(safe-area-inset-bottom)); }
+
+.reglage { margin-bottom: 26px; }
+.reglage label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 14px;
+  margin-bottom: 9px;
+}
+.reglage output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+.aide { font-size: 12.5px; color: var(--texte-doux); margin: 8px 0 0; line-height: 1.5; }
+
+select, input[type="text"], textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--trait);
+  background: var(--fond-releve);
+  color: var(--texte);
+  font: inherit;
+  font-size: 15px;
+}
+
+textarea { resize: vertical; line-height: 1.5; }
+
+input[type="range"] {
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 3px; background: var(--trait);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px; height: 24px; margin-top: -10px;
+  border-radius: 50%; background: var(--accent); border: 0;
+}
+input[type="range"]::-moz-range-track { height: 4px; border-radius: 3px; background: var(--trait); }
+input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; border: 0; border-radius: 50%; background: var(--accent); }
+
+/* --- Voix ---------------------------------------------------------------- */
+
+.liste-voix { list-style: none; margin: 14px 0 0; padding: 0; }
+
+.voix {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--trait);
+}
+.voix-corps { flex: 1; min-width: 0; }
+.voix-nom { font-size: 15px; }
+.voix-detail { font-size: 12.5px; color: var(--texte-doux); margin-top: 3px; }
+.voix-jauge { height: 3px; border-radius: 2px; background: var(--trait); margin-top: 8px; overflow: hidden; display: none; }
+.voix.telecharge .voix-jauge { display: block; }
+.voix-jauge span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+.pastille { font-size: 11px; padding: 3px 8px; border-radius: 20px; background: var(--accent-doux); color: var(--accent); }
+
+/* --- Divers -------------------------------------------------------------- */
+
+.boite {
+  border: 1px solid var(--trait);
+  border-radius: 16px;
+  background: var(--fond-panneau);
+  color: var(--texte);
+  padding: 20px;
+  width: min(560px, 92vw);
+}
+.boite::backdrop { background: rgba(0, 0, 0, 0.6); }
+.boite h2 { margin: 0 0 16px; font-size: 17px; }
+.boite input { margin-bottom: 12px; }
+.boite menu { display: flex; justify-content: flex-end; gap: 10px; margin: 18px 0 0; padding: 0; }
+
+.message {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--hauteur-lecteur) + 20px);
+  transform: translateX(-50%);
+  max-width: 90vw;
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: var(--fond-releve);
+  border: 1px solid var(--trait);
+  font-size: 14px;
+  z-index: 40;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

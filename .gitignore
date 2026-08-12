@@ -1,6 +1,4 @@
 node_modules/
-public/vendor/
-public/voices/
-*.onnx
-*.onnx.json
+src/vendor/
 .DS_Store
+npm-debug.log*

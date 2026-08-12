@@ -1,0 +1,35 @@
+{
+  "id": "/voxlire/",
+  "name": "Voxlire — lecture à voix haute",
+  "short_name": "Voxlire",
+  "description": "Lit vos livres et vos textes à voix haute, avec les silences et les respirations d'un vrai lecteur. Sans connexion.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#12100e",
+  "theme_color": "#12100e",
+  "categories": ["books", "education", "productivity"],
+  "icons": [
+    { "src": "./assets/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./assets/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./assets/icone-512-masquable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./assets/icone.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "application/epub+zip": [".epub"],
+        "text/plain": [".txt"]
+      }
+    }
+  ],
+  "share_target": {
+    "action": "./",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  }
+}

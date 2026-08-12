@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12100e">
+<meta name="description" content="Lecteur de livres à voix haute, neuronal et hors-ligne.">
+<title>Voxlire</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./assets/icone-192.png">
+<link rel="stylesheet" href="./src/ui/styles.css">
+</head>
+<body data-vue="bibliotheque">
+
+<!-- ------------------------------------------------------------------ -->
+<!-- Bibliothèque                                                        -->
+<!-- ------------------------------------------------------------------ -->
+<section id="vue-bibliotheque" class="vue">
+  <header class="entete">
+    <h1 class="marque">Voxlire</h1>
+    <button class="bouton-icone" data-action="ouvrir-reglages" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.3 2.6a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.4-1c.5.4 1.1.8 1.7 1l.3 2.6h4l.3-2.6c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
+  </header>
+
+  <div class="contenu">
+    <div class="import">
+      <button class="bouton-large" data-action="coller">
+        <span class="bouton-titre">Coller un texte</span>
+        <span class="bouton-sous">Un article, un chapitre, ce que vous voulez</span>
+      </button>
+      <button class="bouton-large" data-action="ouvrir-fichier">
+        <span class="bouton-titre">Ouvrir un fichier</span>
+        <span class="bouton-sous">Livre EPUB ou fichier texte</span>
+      </button>
+      <input type="file" id="champ-fichier" accept=".epub,.txt,text/plain,application/epub+zip" hidden>
+    </div>
+
+    <h2 class="titre-section">Mes lectures</h2>
+    <ul id="liste-livres" class="liste-livres"></ul>
+    <p id="bibliotheque-vide" class="vide">Rien encore. Collez un texte ou ouvrez un livre.</p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------------ -->
+<!-- Lecture                                                             -->
+<!-- ------------------------------------------------------------------ -->
+<section id="vue-lecture" class="vue">
+  <header class="entete">
+    <button class="bouton-icone" data-action="retour" aria-label="Retour à la bibliothèque">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="entete-titre">
+      <span id="titre-lecture" class="titre-lecture"></span>
+      <span id="chapitre-lecture" class="sous-titre"></span>
+    </div>
+    <button class="bouton-icone" data-action="ouvrir-reglages" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.3 2.6a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.4-1c.5.4 1.1.8 1.7 1l.3 2.6h4l.3-2.6c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    </button>
+  </header>
+
+  <div id="texte" class="texte" tabindex="0"></div>
+
+  <footer class="lecteur">
+    <div class="progression">
+      <div id="barre-progression" class="barre"><div class="barre-remplie"></div></div>
+      <div class="temps">
+        <span id="temps-lu">0:00</span>
+        <span id="temps-total">0:00</span>
+      </div>
+    </div>
+    <div class="commandes">
+      <button class="bouton-icone" data-action="precedent" aria-label="Phrase précédente">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6v12L9 12zM6 5v14" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="bouton-lecture" class="bouton-lecture" data-action="lecture" aria-label="Lire">
+        <svg class="icone-lire" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l12 7-12 7z" fill="currentColor"/></svg>
+        <svg class="icone-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z" fill="currentColor"/></svg>
+      </button>
+      <button class="bouton-icone" data-action="suivant" aria-label="Phrase suivante">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6v12l9-6zM18 5v14" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </footer>
+</section>
+
+<!-- ------------------------------------------------------------------ -->
+<!-- Panneaux                                                            -->
+<!-- ------------------------------------------------------------------ -->
+<div id="voile" class="voile" hidden></div>
+
+<aside id="panneau-reglages" class="panneau" hidden aria-label="Réglages">
+  <header class="panneau-entete">
+    <h2>Réglages</h2>
+    <button class="bouton-icone" data-action="fermer-panneau" aria-label="Fermer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+
+  <div class="panneau-corps">
+    <div class="reglage">
+      <label for="choix-voix">Voix</label>
+      <select id="choix-voix"></select>
+      <p id="etat-voix" class="aide"></p>
+      <button class="bouton-secondaire" data-action="gerer-voix">Gérer les voix hors-ligne</button>
+    </div>
+
+    <div class="reglage">
+      <label for="curseur-debit">Débit <output id="valeur-debit">1,00×</output></label>
+      <input type="range" id="curseur-debit" min="0.6" max="1.8" step="0.05" value="1">
+    </div>
+
+    <div class="reglage">
+      <label for="curseur-pauses">Longueur des silences <output id="valeur-pauses">1,00×</output></label>
+      <input type="range" id="curseur-pauses" min="0.4" max="2.2" step="0.05" value="1">
+      <p class="aide">Le temps laissé aux points, aux virgules, aux paragraphes.</p>
+    </div>
+
+    <div class="reglage">
+      <label for="curseur-souffle">Respiration <output id="valeur-souffle">1,00×</output></label>
+      <input type="range" id="curseur-souffle" min="0" max="2" step="0.05" value="1">
+      <p class="aide">À zéro, le lecteur ne reprend jamais son souffle.</p>
+    </div>
+
+    <div class="reglage">
+      <label for="curseur-volume">Volume <output id="valeur-volume">100 %</output></label>
+      <input type="range" id="curseur-volume" min="0" max="1" step="0.02" value="1">
+    </div>
+
+    <div class="reglage">
+      <label for="curseur-taille">Taille du texte <output id="valeur-taille">19 px</output></label>
+      <input type="range" id="curseur-taille" min="14" max="30" step="1" value="19">
+    </div>
+
+    <p id="place-disque" class="aide"></p>
+  </div>
+</aside>
+
+<aside id="panneau-voix" class="panneau" hidden aria-label="Voix hors-ligne">
+  <header class="panneau-entete">
+    <h2>Voix hors-ligne</h2>
+    <button class="bouton-icone" data-action="fermer-panneau" aria-label="Fermer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+  <div class="panneau-corps">
+    <p class="aide">Une voix se télécharge une fois, puis fonctionne sans connexion.</p>
+    <ul id="liste-voix" class="liste-voix"></ul>
+  </div>
+</aside>
+
+<!-- Collage de texte -->
+<dialog id="boite-collage" class="boite">
+  <form method="dialog">
+    <h2>Coller un texte</h2>
+    <input type="text" id="champ-titre" placeholder="Titre (facultatif)" autocomplete="off">
+    <textarea id="champ-texte" rows="12" placeholder="Collez ici le texte à lire…"></textarea>
+    <menu>
+      <button value="annuler" class="bouton-secondaire">Annuler</button>
+      <button value="lire" class="bouton-primaire">Lire</button>
+    </menu>
+  </form>
+</dialog>
+
+<div id="message" class="message" hidden role="status"></div>
+
+<script type="module" src="./src/ui/main.js"></script>
+</body>
+</html>
