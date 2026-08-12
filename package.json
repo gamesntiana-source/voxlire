@@ -1,0 +1,13 @@
+{
+  "name": "voxlire",
+  "version": "1.0.0",
+  "description": "Lecteur de texte à voix haute, neuronal et 100% hors-ligne",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "voices": "node scripts/fetch-voices.mjs",
+    "vendor": "node scripts/fetch-vendor.mjs",
+    "serve": "node scripts/serve.mjs"
+  }
+}
