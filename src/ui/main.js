@@ -699,9 +699,41 @@ async function demarrer() {
 
   requestPersistence();
 
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  }
+  surveillerLesMisesAJour();
+}
+
+/**
+ * Applique les mises à jour de l'application.
+ *
+ * Le service worker garde une copie de tout pour fonctionner hors connexion.
+ * L'effet de bord est qu'une version corrigée ne s'affiche pas : la page
+ * continue de tourner sur les fichiers déjà en cache, et il faut recharger
+ * deux fois pour en sortir — ce que personne ne devine.
+ *
+ * On recharge donc nous-mêmes dès qu'un nouveau service worker prend la main.
+ * Deux précautions : ne rien faire au tout premier passage, où il n'y avait
+ * pas encore de version précédente, et ne jamais recharger pendant une
+ * lecture — couper quelqu'un au milieu d'un chapitre pour lui appliquer une
+ * correction de CSS serait un remède pire que le mal.
+ */
+function surveillerLesMisesAJour() {
+  if (!('serviceWorker' in navigator)) return;
+
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+
+  const premiereVisite = !navigator.serviceWorker.controller;
+  let dejaTraite = false;
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (premiereVisite || dejaTraite) return;
+    dejaTraite = true;
+
+    if (etat.player?.state === 'playing') {
+      dire('Nouvelle version prête. Elle s’appliquera au prochain lancement.', 6000);
+      return;
+    }
+    location.reload();
+  });
 }
 
 demarrer();
