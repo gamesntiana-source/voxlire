@@ -193,6 +193,15 @@
   </form>
 </dialog>
 
+<!-- Progression du téléchargement des voix, en fond depuis le lancement -->
+<div id="telechargement" class="telechargement" hidden role="status" aria-live="polite">
+  <div class="telechargement-ligne">
+    <span id="telechargement-texte"></span>
+    <span id="telechargement-part">0 %</span>
+  </div>
+  <div class="telechargement-jauge"><span id="telechargement-remplie"></span></div>
+</div>
+
 <div id="message" class="message" hidden role="status"></div>
 
 <script type="module" src="./src/ui/main.js"></script>

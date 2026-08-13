@@ -14,7 +14,9 @@ import { openEpub } from '../epub.js';
 import {
   loadSettings, saveSettings, library, bookId, storageEstimate, requestPersistence,
 } from '../store.js';
-import { listVoices, loadVoice, installVoice, removeVoice, voiceStatus } from '../engines/index.js';
+import {
+  listVoices, loadVoice, installVoice, installAllVoices, removeVoice, voiceStatus, CATALOGUE,
+} from '../engines/index.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -29,6 +31,7 @@ const etat = {
   moteur: null,
   spans: [],
   veille: null,         // WakeLockSentinel
+  telechargement: null, // progression des voix, ou null quand il n'y a rien en cours
 };
 
 // ---------------------------------------------------------------------------
@@ -308,9 +311,13 @@ async function remplirChoixVoix() {
     select.value = liste[0].id;
   }
 
+  const enCours = etat.telechargement;
   $('#etat-voix').textContent = installees.length
-    ? `${installees.length} voix disponible${installees.length > 1 ? 's' : ''} hors connexion.`
-    : 'Aucune voix installée : ouvrez « Gérer les voix » pour en télécharger une.';
+    ? `${installees.length} voix sur ${voix.length} disponible${installees.length > 1 ? 's' : ''} hors connexion.`
+      + (enCours ? ` ${enCours.label} en cours…` : '')
+    : enCours
+      ? `Téléchargement de ${enCours.label} en cours…`
+      : 'Aucune voix installée : ouvrez « Gérer les voix » pour en télécharger une.';
 }
 
 async function afficherPanneauVoix() {
@@ -383,6 +390,62 @@ async function afficherPanneauVoix() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Téléchargement des voix, en fond dès le lancement
+// ---------------------------------------------------------------------------
+
+/** Met à jour le bandeau, ou l'efface si `p` est nul. */
+function afficherTelechargement(p) {
+  const boite = $('#telechargement');
+  document.body.classList.toggle('telecharge', !!p);
+  if (!p) { boite.hidden = true; return; }
+
+  boite.hidden = false;
+  $('#telechargement-texte').textContent = p.nombre > 1
+    ? `Téléchargement de ${p.label} — voix ${p.rang} sur ${p.nombre}`
+    : `Téléchargement de ${p.label}`;
+  $('#telechargement-part').textContent = `${Math.round(p.part * 100)} %`;
+  $('#telechargement-remplie').style.width = `${p.part * 100}%`;
+}
+
+/**
+ * Installe toutes les voix, sans rien demander, dès le premier lancement.
+ *
+ * Une voix ne se télécharge qu'une fois : le cache est interrogé avant
+ * chaque paquet, et le magasin refuse deux descentes simultanées du même
+ * fichier. Rouvrir l'application ne coûte donc rien.
+ *
+ * L'économiseur de données est un choix explicite de l'utilisateur, et
+ * 295 Mo sur un forfait mobile ne se prennent pas à la légère : on s'abstient
+ * et on le dit.
+ */
+async function installerLesVoixEnFond() {
+  if (navigator.connection?.saveData) {
+    dire('Économiseur de données actif : les voix s’installent depuis les réglages.', 8000);
+    return;
+  }
+
+  let rangAffiche = 0;
+  try {
+    const { echecs } = await installAllVoices((p) => {
+      etat.telechargement = p;
+      afficherTelechargement(p);
+
+      // Chaque voix terminée rejoint la liste : autant la rendre choisissable
+      // tout de suite plutôt qu'au bout des 295 Mo.
+      if (p.rang !== rangAffiche) { rangAffiche = p.rang; remplirChoixVoix(); }
+    });
+    if (echecs.length) dire(`Voix non installées : ${echecs.join(', ')}`, 8000);
+  } catch (err) {
+    dire(`Téléchargement des voix interrompu : ${err.message}`, 6000);
+  } finally {
+    etat.telechargement = null;
+    afficherTelechargement(null);
+    remplirChoixVoix();
+    afficherPanneauVoix();
+  }
+}
+
 /** Charge la voix choisie, en affichant l'attente s'il faut la télécharger. */
 async function preparerVoix() {
   const id = etat.reglages.voice;
@@ -390,10 +453,15 @@ async function preparerVoix() {
 
   const statut = await voiceStatus(id);
   if (!statut.installed) {
-    dire(`Téléchargement de la voix (${poids(statut.bytes)})…`, 60000);
+    // Le téléchargement de fond l'a peut-être déjà commencée : le magasin
+    // s'en aperçoit et se greffe dessus au lieu de la reprendre à zéro.
+    const nom = CATALOGUE.find((v) => v.id === id)?.label || 'la voix';
+    dire(`Téléchargement de ${nom} (${poids(statut.bytes)})… la lecture démarrera ensuite.`, 60000);
     try {
       await installVoice(id, ({ recu, total }) => {
-        if (total) dire(`Téléchargement de la voix : ${Math.round((recu / total) * 100)} %`, 60000);
+        if (!total) return;
+        const part = Math.round((recu / total) * 100);
+        dire(`Téléchargement de ${nom} : ${part} % — la lecture démarrera ensuite.`, 60000);
       });
     } catch (err) {
       dire(`Voix indisponible : ${err.message}`, 6000);
@@ -700,6 +768,10 @@ async function demarrer() {
   requestPersistence();
 
   surveillerLesMisesAJour();
+
+  // Sans attendre : l'application doit rester utilisable pendant que les
+  // voix descendent, et la première suffit déjà à lire.
+  installerLesVoixEnFond();
 }
 
 /**

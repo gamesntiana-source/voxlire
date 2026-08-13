@@ -60,9 +60,52 @@ body {
  */
 [hidden] { display: none !important; }
 
+/* --- Téléchargement des voix --------------------------------------------- */
+
+/* Un bandeau en haut plutôt qu'un message qui s'efface : le téléchargement
+   dure plusieurs minutes, et on doit pouvoir vérifier où il en est à tout
+   moment sans avoir rien à toucher. */
+.telechargement {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  height: calc(46px + env(safe-area-inset-top));
+  padding: max(9px, env(safe-area-inset-top)) 14px 8px;
+  background: var(--fond-panneau);
+  border-bottom: 1px solid var(--trait);
+  font-size: 12.5px;
+  color: var(--texte-doux);
+}
+.telechargement-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.telechargement-ligne span:last-child { font-variant-numeric: tabular-nums; color: var(--accent); }
+.telechargement-jauge { height: 3px; border-radius: 2px; background: var(--trait); overflow: hidden; }
+.telechargement-jauge span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.3s linear;
+}
+
 /* --- Vues ---------------------------------------------------------------- */
 
 .vue { display: none; flex-direction: column; height: 100dvh; }
+
+/* Le bandeau de téléchargement pousse la vue vers le bas au lieu de la
+   recouvrir : sinon il masquerait l'en-tête, donc le bouton des réglages et
+   le retour à la bibliothèque — précisément ce qu'on veut atteindre pendant
+   que ça télécharge. */
+body.telecharge .vue {
+  margin-top: calc(46px + env(safe-area-inset-top));
+  height: calc(100dvh - 46px - env(safe-area-inset-top));
+}
 body[data-vue="bibliotheque"] #vue-bibliotheque,
 body[data-vue="lecture"] #vue-lecture { display: flex; }
 

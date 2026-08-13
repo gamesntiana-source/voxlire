@@ -10,7 +10,7 @@
  * l'application ne doit pas coûter un nouveau téléchargement des voix.
  */
 
-import { CATALOGUE } from './catalogue.js';
+import { CATALOGUE, VOIX_PAR_DEFAUT } from './catalogue.js';
 
 const CACHE_VOIX = 'voxlire-voix-v1';
 
@@ -108,6 +108,18 @@ async function telecharger(url, attendu, onChunk) {
 }
 
 /**
+ * Téléchargements en cours, indexés par paquet.
+ *
+ * Sans cette table, appuyer sur Lire pendant que le téléchargement de fond
+ * tourne lancerait une SECONDE descente des mêmes 63 Mo. Les deux
+ * aboutiraient, la dernière écraserait la première, et l'utilisateur aurait
+ * payé deux fois. Un paquet ne se télécharge qu'une fois : les appels
+ * suivants se greffent sur celui qui est déjà en vol et en suivent la
+ * progression.
+ */
+const enVol = new Map();
+
+/**
  * Installe une voix : tous ses fichiers, avec une progression d'ensemble.
  *
  * @param {string} id
@@ -115,6 +127,32 @@ async function telecharger(url, attendu, onChunk) {
  */
 export async function installVoice(id, onProgress = () => {}) {
   const voix = definition(id);
+
+  const dejaEnVol = enVol.get(voix.pack);
+  if (dejaEnVol) {
+    dejaEnVol.ecouteurs.add(onProgress);
+    // On rejoue la dernière progression connue : sans elle, une barre qui
+    // vient de s'afficher resterait à zéro jusqu'au prochain morceau reçu.
+    if (dejaEnVol.dernier) onProgress(dejaEnVol.dernier);
+    try { await dejaEnVol.promesse; } finally { dejaEnVol.ecouteurs.delete(onProgress); }
+    return voiceStatus(id);
+  }
+
+  const suivi = { ecouteurs: new Set([onProgress]), dernier: null, promesse: null };
+  suivi.promesse = telechargerPaquet(voix, (p) => {
+    suivi.dernier = p;
+    for (const ecouteur of suivi.ecouteurs) {
+      try { ecouteur(p); } catch { /* un auditeur fautif n'arrête pas le téléchargement */ }
+    }
+  });
+  enVol.set(voix.pack, suivi);
+
+  try { await suivi.promesse; } finally { enVol.delete(voix.pack); }
+  return voiceStatus(id);
+}
+
+/** Le téléchargement proprement dit, un paquet à la fois. */
+async function telechargerPaquet(voix, onProgress) {
   const c = await cache();
   const totalAttendu = voix.files.reduce((a, f) => a + f.bytes, 0);
   let dejaFait = 0;
@@ -158,7 +196,64 @@ export async function installVoice(id, onProgress = () => {}) {
   }
 
   onProgress({ recu: totalAttendu, total: totalAttendu, fichier: 'fin' });
-  return voiceStatus(id);
+}
+
+/**
+ * Installe toutes les voix du catalogue, l'une après l'autre.
+ *
+ * Dans l'ordre : la voix par défaut d'abord, pour qu'on puisse lire au plus
+ * vite, puis les autres de la plus légère à la plus lourde. Un paquet déjà
+ * présent est sauté sans un octet de réseau.
+ *
+ * Une seule à la fois, jamais en parallèle : trois téléchargements de 60 Mo
+ * simultanés se volent la bande passante et retardent celui dont on a
+ * réellement besoin, le premier.
+ *
+ * @param {(p:{label:string, rang:number, nombre:number, recu:number,
+ *            octets:number, part:number})=>void} [onProgress]
+ * @returns {Promise<{installes:number, echecs:string[]}>}
+ */
+export async function installAllVoices(onProgress = () => {}) {
+  const paquets = new Map();
+  for (const voix of CATALOGUE) {
+    if (!paquets.has(voix.pack)) paquets.set(voix.pack, voix);
+  }
+
+  const parDefaut = definition(VOIX_PAR_DEFAUT).pack;
+  const ordre = [...paquets.values()].sort((a, b) => {
+    if (a.pack === parDefaut) return -1;
+    if (b.pack === parDefaut) return 1;
+    return a.files.reduce((n, f) => n + f.bytes, 0) - b.files.reduce((n, f) => n + f.bytes, 0);
+  });
+
+  const aFaire = [];
+  for (const voix of ordre) {
+    if (!(await voiceStatus(voix.id)).installed) aFaire.push(voix);
+  }
+
+  const echecs = [];
+  let installes = 0;
+
+  for (const [i, voix] of aFaire.entries()) {
+    const octets = voix.files.reduce((n, f) => n + f.bytes, 0);
+    try {
+      await installVoice(voix.id, ({ recu }) => onProgress({
+        label: voix.label,
+        rang: i + 1,
+        nombre: aFaire.length,
+        recu,
+        octets,
+        part: octets ? Math.min(1, recu / octets) : 0,
+      }));
+      installes++;
+    } catch (err) {
+      // Une voix qui échoue ne doit pas empêcher les suivantes : on note et
+      // on continue, l'utilisateur pourra toujours réessayer à la main.
+      echecs.push(`${voix.label} (${err.message})`);
+    }
+  }
+
+  return { installes, echecs };
 }
 
 /**
@@ -239,4 +334,4 @@ export async function unloadVoices() {
   await Promise.all([...moteurs.keys()].map(fermerPaquet));
 }
 
-export { CATALOGUE };
+export { CATALOGUE, VOIX_PAR_DEFAUT };
