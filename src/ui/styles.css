@@ -50,6 +50,16 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/**
+ * L'attribut `hidden` ne cache un élément que par la feuille de style du
+ * navigateur, laquelle perd contre n'importe quelle règle d'auteur. Sans ce
+ * rappel, `.panneau { display: flex }` gardait les panneaux à l'écran quoi
+ * que fasse le JavaScript : la croix éteignait le voile et laissait le
+ * panneau collé. Le `!important` est ici la règle, pas l'exception —
+ * « caché » ne se discute pas.
+ */
+[hidden] { display: none !important; }
+
 /* --- Vues ---------------------------------------------------------------- */
 
 .vue { display: none; flex-direction: column; height: 100dvh; }
