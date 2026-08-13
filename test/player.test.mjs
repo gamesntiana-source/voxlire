@@ -113,7 +113,11 @@ test('une question laisse un silence plus long qu’un point', async () => {
 
 test('une respiration s’insère juste avant la phrase concernée', async () => {
   const long = 'Cette phrase a une longueur tout à fait ordinaire pour un livre. ';
-  const { sink, player } = setup(long.repeat(12), { segmentOptions: { breathEvery: 8 } });
+  // La respiration est coupée par défaut : un test qui la vérifie l'allume.
+  const { sink, player } = setup(long.repeat(12), {
+    breathGain: 1,
+    segmentOptions: { breathEvery: 8 },
+  });
   player.play();
   await ecouterJusquAuBout(sink, player);
 

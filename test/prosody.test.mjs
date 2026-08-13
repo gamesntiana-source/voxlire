@@ -239,3 +239,63 @@ test('le seuil de découpe sur virgule est réglable', () => {
   assert.equal(segment(texte, { minClause: 200 }).segments.length, 1);
   assert.equal(segment(texte, { minClause: 10 }).segments.length, 2);
 });
+
+// ---------------------------------------------------------------------------
+// Ligne mélodique
+// ---------------------------------------------------------------------------
+
+test('chaque segment reçoit une hauteur et un débit', () => {
+  const r = segment('Une phrase. Une autre phrase.');
+  for (const s of r.segments) {
+    assert.equal(typeof s.pitch, 'number', 'hauteur manquante');
+    assert.equal(typeof s.tempo, 'number', 'débit manquant');
+    assert.ok(Number.isFinite(s.pitch) && Number.isFinite(s.tempo));
+  }
+});
+
+test('un paragraphe s’attaque haut et redescend', () => {
+  const p = 'Voici une phrase de longueur ordinaire. ';
+  const r = segment(p.repeat(6));
+  const premier = r.segments[0].pitch;
+  const dernier = r.segments.at(-1).pitch;
+  assert.ok(premier > dernier + 1,
+    `la voix devrait descendre : ${premier.toFixed(2)} puis ${dernier.toFixed(2)}`);
+});
+
+test('le paragraphe suivant repart en haut', () => {
+  const p = 'Voici une phrase de longueur ordinaire. '.repeat(5);
+  const r = segment(`${p}\n\n${p}`);
+  const finParagraphe = r.segments.findIndex((s) => s.pauseKind === 'paragraph');
+  assert.ok(r.segments[finParagraphe + 1].pitch > r.segments[finParagraphe].pitch + 1,
+    'la reprise de paragraphe devrait remonter');
+});
+
+test('une question monte au-dessus de l’affirmation voisine', () => {
+  const r = segment('Il rentra chez lui. Que fais-tu là ?');
+  const [affirmation, question] = r.segments;
+  assert.equal(question.pauseKind, 'question');
+  assert.ok(question.pitch > affirmation.pitch - 0.5, 'la question devrait remonter');
+});
+
+test('la transposition reste dans les bornes', () => {
+  // Au-delà de deux demi-tons, le rééchantillonnage déplace les formants et
+  // la voix change d'identité.
+  const r = segment('Question ? '.repeat(30) + '\n\nSuite du texte, bien plus longue et posée.');
+  for (const s of r.segments) {
+    assert.ok(Math.abs(s.pitch) <= 2.0001, `hauteur hors bornes : ${s.pitch}`);
+  }
+});
+
+test('la dernière phrase d’un paragraphe ralentit', () => {
+  const r = segment('Première phrase ici.\n\nSeconde phrase là.');
+  const fin = r.segments.find((s) => s.pauseKind === 'paragraph');
+  assert.ok(fin.tempo < 1, `débit ${fin.tempo} : la fin de paragraphe devrait se poser`);
+});
+
+test('la mélodie est reproductible', () => {
+  const texte = 'Une phrase. Une autre. Et une troisième pour finir.';
+  assert.deepEqual(
+    segment(texte).segments.map((s) => [s.pitch, s.tempo]),
+    segment(texte).segments.map((s) => [s.pitch, s.tempo]),
+  );
+});

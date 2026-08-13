@@ -343,11 +343,74 @@ function splitLong(sentence, offset, maxChars, minChunk) {
   ];
 }
 
+/** Ponctuations qui laissent la phrase ouverte : la suite en fait partie. */
+const CONTINUE = new Set(['soft', 'comma', 'dash', 'semicolon', 'colon']);
+
+/** Réglages de la ligne mélodique, en demi-tons. */
+const MELODIE = {
+  attaque: 1.9,        // hauteur au début d'un paragraphe
+  fond: -1.3,          // hauteur atteinte après quelques phrases
+  installation: 4,     // nombre de phrases pour descendre de l'une à l'autre
+  suite: -0.35,        // chaque proposition d'une même phrase descend un peu
+  question: 0.8,       // une question remonte
+  exclamation: 0.5,
+  jeu: 0.35,           // variation résiduelle, pour ne pas chanter juste
+  /**
+   * Garde-fou. La transposition se fait par rééchantillonnage, qui déplace
+   * aussi les formants : au-delà de deux demi-tons on ne transpose plus la
+   * voix, on en change. Deux demi-tons suffisent largement à sortir du
+   * monocorde sans que le lecteur ait l'air de muer.
+   */
+  limite: 2.0,
+  ralenti: 0.94,       // débit de la dernière phrase d'un paragraphe
+  jeuDebit: 0.04,
+};
+
+/**
+ * Attribue à chaque segment sa hauteur (en demi-tons) et son débit relatif.
+ * Les deux sont déterministes : deux lectures du même livre sonnent pareil.
+ */
+function placerLaMelodie(segments, rand) {
+  let rang = 0;             // rang de la phrase dans son paragraphe
+  let hauteurPhrase = 0;
+
+  segments.forEach((seg, i) => {
+    const prec = segments[i - 1];
+    const suite = prec && CONTINUE.has(prec.pauseKind);
+
+    if (suite) {
+      // Même phrase : on poursuit la descente au lieu de repartir en haut.
+      hauteurPhrase += MELODIE.suite;
+    } else {
+      if (!prec || prec.pauseKind === 'paragraph' || prec.pauseKind === 'lineBreak') rang = 0;
+      else rang++;
+
+      const avancement = Math.min(1, rang / MELODIE.installation);
+      hauteurPhrase = MELODIE.attaque + (MELODIE.fond - MELODIE.attaque) * avancement;
+
+      if (seg.pauseKind === 'question') hauteurPhrase += MELODIE.question;
+      else if (seg.pauseKind === 'exclam') hauteurPhrase += MELODIE.exclamation;
+    }
+
+    const brute = hauteurPhrase + (rand() * 2 - 1) * MELODIE.jeu;
+    const bornee = Math.max(-MELODIE.limite, Math.min(MELODIE.limite, brute));
+    seg.pitch = Math.round(bornee * 100) / 100;
+
+    // La dernière phrase d'un paragraphe se pose : c'est un signal fort.
+    const finDeParagraphe = seg.pauseKind === 'paragraph';
+    const debit = (finDeParagraphe ? MELODIE.ralenti : 1)
+      + (rand() * 2 - 1) * MELODIE.jeuDebit;
+    seg.tempo = Math.round(debit * 100) / 100;
+  });
+}
+
 /**
  * Découpe un texte en segments prêts à être synthétisés.
  *
  * Chaque segment : { index, text, pauseAfter, pauseKind, breathBefore,
- *                    breathDepth, estDuration, start, end }
+ *                    breathDepth, estDuration, start, end, pitch, tempo }
+ * `pitch` est une transposition en demi-tons et `tempo` un facteur de débit :
+ * ensemble ils dessinent la ligne mélodique du paragraphe.
  * `start`/`end` pointent dans le texte NORMALISÉ ; utilise `map` pour
  * remonter au texte d'origine.
  */
@@ -486,6 +549,20 @@ export function segment(rawText, options = {}) {
       sinceBreath += seg.estDuration + seg.pauseAfter / 1000;
     }
   }
+
+  // 4. Ligne mélodique.
+  //
+  // Un modèle Piper ne sait rien du contexte : chaque phrase lui est donnée
+  // seule, et il la rend donc invariablement dans le même registre. Mesuré,
+  // l'écart de hauteur moyenne d'une phrase à l'autre ne dépassait pas un
+  // demi-ton — d'où l'impression de voix monocorde, alors même que l'étendue
+  // mélodique À L'INTÉRIEUR d'une phrase est correcte.
+  //
+  // C'est donc à nous de porter la ligne du paragraphe : un lecteur l'attaque
+  // haut, redescend à mesure qu'il avance, repart haut au paragraphe suivant,
+  // et ralentit sur sa dernière phrase. Le lecteur transpose ensuite chaque
+  // segment de la hauteur demandée.
+  placerLaMelodie(segments, rand);
 
   const totalSpeech = segments.reduce((a, s) => a + s.estDuration, 0);
   const totalPause = segments.reduce((a, s) => a + s.pauseAfter / 1000, 0);

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { phonemiser, motEnPhonemes, __test__ } from '../src/engines/phonemes.js';
 import { chercher, taille } from '../src/engines/lexique.js';
 import { prononcer } from '../src/engines/regles.js';
-import { phonemesEnIds } from '../src/engines/piper.js';
+import { phonemesEnIds, transposer } from '../src/engines/piper.js';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 
@@ -193,4 +193,31 @@ test('tous les phonèmes produits existent dans un modèle réel', async () => {
     for (const p of phonemiser(phrase)) if (!VOCABULAIRE.has(p)) absents.add(p);
   }
   assert.deepEqual([...absents], [], 'phonèmes hors vocabulaire du modèle');
+});
+
+// ---------------------------------------------------------------------------
+// Transposition
+// ---------------------------------------------------------------------------
+
+test('la transposition raccourcit d’autant qu’elle monte', () => {
+  const n = 1000;
+  const pcm = new Float32Array(n);
+  for (let i = 0; i < n; i++) pcm[i] = Math.sin((2 * Math.PI * 50 * i) / n);
+
+  assert.equal(transposer(pcm, 2).length, n / 2);
+  assert.equal(transposer(pcm, 1), pcm, 'un rapport de 1 ne recopie rien');
+  assert.equal(transposer(new Float32Array(0), 1.5).length, 0);
+});
+
+test('la transposition double bien la fréquence', () => {
+  const sr = 22050;
+  const n = sr;
+  const pcm = new Float32Array(n);
+  for (let i = 0; i < n; i++) pcm[i] = Math.sin((2 * Math.PI * 200 * i) / sr);
+
+  // Passages par zéro : deux fois plus nombreux par seconde après transposition.
+  const zeros = (x) => { let c = 0; for (let i = 1; i < x.length; i++) if ((x[i - 1] < 0) !== (x[i] < 0)) c++; return c; };
+  const avant = zeros(pcm) / (pcm.length / sr);
+  const apres = transposer(pcm, 2);
+  assert.ok(Math.abs(zeros(apres) / (apres.length / sr) / avant - 2) < 0.05);
 });

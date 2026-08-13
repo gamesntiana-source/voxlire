@@ -72,6 +72,32 @@ export function phonemesEnIds(phonemes, table) {
   return { ids: BigInt64Array.from(ids, BigInt), inconnus };
 }
 
+/**
+ * Transpose un son en le rééchantillonnant.
+ *
+ * Rééchantillonner d'un facteur k divise la durée par k et multiplie la
+ * hauteur d'autant : les deux sont indissociables. On compense donc en amont,
+ * en demandant au modèle une phrase k fois plus longue — la durée revient à
+ * ce qu'elle devait être, et seule la hauteur a bougé. Aucun vocodeur de
+ * phase, aucun artefact : ce n'est qu'une interpolation.
+ *
+ * @param {Float32Array} pcm
+ * @param {number} k rapport de transposition (2^(demi-tons/12))
+ */
+export function transposer(pcm, k) {
+  if (!pcm.length || Math.abs(k - 1) < 1e-4) return pcm;
+
+  const n = Math.floor(pcm.length / k);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = i * k;
+    const j = Math.floor(x);
+    const reste = x - j;
+    out[i] = j + 1 < pcm.length ? pcm[j] * (1 - reste) + pcm[j + 1] * reste : pcm[j];
+  }
+  return out;
+}
+
 const decodeurUtf8 = new TextDecoder();
 
 /**
@@ -105,7 +131,7 @@ export async function createPiperEngine(fichiers) {
   /** Phonèmes déjà signalés comme absents, pour ne pas inonder la console. */
   const dejaSignales = new Set();
 
-  async function inferer(texte, { rate = 1, speaker = null } = {}) {
+  async function inferer(texte, { rate = 1, speaker = null, pitch = 0, tempo = 1 } = {}) {
     const phonemes = phonemiser(texte);
     const { ids, inconnus } = phonemesEnIds(phonemes, table);
 
@@ -119,8 +145,11 @@ export async function createPiperEngine(fichiers) {
     if (ids.length <= 3) return new Float32Array(0);
 
     // Le débit est l'inverse de l'échelle de durée : parler plus vite, c'est
-    // raccourcir chaque phonème.
-    const echelleLongueur = longueurBase / Math.max(0.1, rate);
+    // raccourcir chaque phonème. `tempo` y ajoute la respiration du
+    // paragraphe, et le facteur de transposition compense d'avance le
+    // rééchantillonnage qui suivra.
+    const transposition = 2 ** (pitch / 12);
+    const echelleLongueur = (longueurBase / Math.max(0.1, rate)) * tempo * transposition;
 
     const entrees = {
       input: new runtime.Tensor('int64', ids, [1, ids.length]),
@@ -136,7 +165,8 @@ export async function createPiperEngine(fichiers) {
     const pcm = premier.data;
 
     // Le modèle rend [1, 1, échantillons] ; on n'a besoin que du dernier axe.
-    return pcm instanceof Float32Array ? pcm : Float32Array.from(pcm);
+    const brut = pcm instanceof Float32Array ? pcm : Float32Array.from(pcm);
+    return transposer(brut, transposition);
   }
 
   return {

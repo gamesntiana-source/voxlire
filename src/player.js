@@ -24,7 +24,12 @@ const DEFAULTS = {
   prefetch: 3,      // phrases à synthétiser d'avance
   tickMs: 120,      // battement de l'ordonnanceur
   leadIn: 0.12,     // marge avant le tout premier son, pour ne pas le tronquer
-  breathGain: 1,
+  /**
+   * Respiration coupée par défaut : le souffle synthétisé s'entend comme un
+   * bruit et non comme une inspiration. Le découpage continue de marquer les
+   * endroits où respirer — il suffit de remonter ce gain pour les entendre.
+   */
+  breathGain: 0,
   rate: 1,
   voice: null,
 };
@@ -85,7 +90,14 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
     const seg = segments[i];
     const gen = generation;
     const promise = Promise.resolve()
-      .then(() => engine.synthesize(seg.text, { voice, rate, index: i }))
+      .then(() => engine.synthesize(seg.text, {
+        voice,
+        rate,
+        index: i,
+        // La ligne mélodique du paragraphe, décidée au découpage.
+        pitch: seg.pitch ?? 0,
+        tempo: seg.tempo ?? 1,
+      }))
       .then((pcm) => (pcm instanceof Float32Array ? pcm : Float32Array.from(pcm || [])))
       // Le moteur emballe chaque phrase dans une quantité de silence qui lui
       // appartient et qui varie sans raison. On la retire pour que les
