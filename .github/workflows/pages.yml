@@ -1,0 +1,68 @@
+# Publie Voxlire sur GitHub Pages.
+#
+# La vendorisation d'ONNX Runtime se fait ICI, au moment du build, et non
+# dans le depot : src/vendor/ reste ignore par git, donc le depot ne traine
+# pas 13,5 Mo de binaire a chaque clone, et le site publie les recoit quand
+# meme. C'est la raison d'etre de ce fichier.
+#
+# A savoir : GitHub Pages ne permet pas de poser les en-tetes COOP/COEP, donc
+# la page n'est pas isolee et WebAssembly tourne sur un seul fil. piper.js le
+# detecte tout seul (self.crossOriginIsolated) et s'y adapte : c'est plus lent
+# qu'en local avec `npm run serve:isolation`, mais ca fonctionne.
+
+name: Publier sur GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Une seule publication a la fois ; la plus recente gagne.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # On ne publie pas ce qui ne passe pas les tests.
+      - name: Tests
+        run: node --test test/*.test.mjs
+
+      - name: Vendoriser ONNX Runtime
+        run: npm run vendor
+
+      # On assemble le site a la main plutot que de televerser le dossier
+      # entier : .git, .cache et les scripts n'ont rien a faire en ligne.
+      - name: Assembler le site
+        run: |
+          mkdir -p site
+          cp index.html manifest.webmanifest sw.js site/
+          cp -r assets src site/
+          rm -rf site/src/vendor/ort/*.map
+          du -sh site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploiement
+        uses: actions/deploy-pages@v4
