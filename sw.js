@@ -19,7 +19,7 @@
  * ne bougez VERSION_MOTEUR que si son contenu a réellement changé.
  */
 
-const VERSION_COQUILLE = 'v2';
+const VERSION_COQUILLE = 'v3';
 const VERSION_MOTEUR = 'ort1.27.0-lex1';
 
 const CACHE_COQUILLE = `voxlire-coquille-${VERSION_COQUILLE}`;
@@ -34,6 +34,7 @@ const COQUILLE = [
   './src/prosody.js',
   './src/player.js',
   './src/breath.js',
+  './src/silence.js',
   './src/audio.js',
   './src/store.js',
   './src/epub.js',

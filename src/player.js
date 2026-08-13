@@ -27,13 +27,6 @@ const DEFAULTS = {
   breathGain: 1,
   rate: 1,
   voice: null,
-  /**
-   * Durée visée pour les silences INTERNES à une phrase — ceux des virgules.
-   * Le modèle les expédie en 150 ms là où une voix humaine en prend 400 ;
-   * sans ce rattrapage, l'oreille ne perçoit même pas la virgule, et la
-   * phrase défile d'un bloc.
-   */
-  innerPause: 0.42,
 };
 
 const defaultTimer = {
@@ -70,7 +63,6 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
   let voice = opts.voice;
   let rate = opts.rate;
   let breathGain = opts.breathGain;
-  let innerPause = opts.innerPause;
   let finVoix = 0;             // instant où la dernière phrase s'est tue
 
   function emit(name, payload) {
@@ -98,7 +90,7 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
       // Le moteur emballe chaque phrase dans une quantité de silence qui lui
       // appartient et qui varie sans raison. On la retire pour que les
       // durées décidées par le découpage soient celles qu'on entend.
-      .then((pcm) => mettreEnForme(pcm, { sampleRate: sink.sampleRate, creuxVise: innerPause }))
+      .then((pcm) => mettreEnForme(pcm, { sampleRate: sink.sampleRate }))
       .catch((error) => {
         // Une phrase qui refuse de se synthétiser ne doit pas arrêter le livre :
         // on la saute en silence et on le signale.
@@ -325,20 +317,6 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
     },
 
     setBreathGain(g) { breathGain = g; },
-
-    /**
-     * Règle la durée des silences internes — ceux des virgules. Le son mis en
-     * forme est en cache : il faut le refaire, sinon le curseur ne changerait
-     * que les phrases pas encore synthétisées.
-     */
-    setInnerPause(secondes) {
-      if (secondes === innerPause) return;
-      innerPause = secondes;
-      const from = announced >= 0 ? announced : index;
-      const wasPlaying = state === 'playing';
-      resetTo(from);
-      if (wasPlaying) pump();
-    },
 
     get state() { return state; },
     get index() { return index; },

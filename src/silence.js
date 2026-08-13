@@ -9,17 +9,31 @@
  * varie d'une phrase à l'autre sans que rien dans le texte ne le justifie.
  * C'est exactement ce qui fait « robot » : un rythme irrégulier sans raison.
  *
- * On rogne donc ce silence pour reprendre la main, puis on rallonge les
- * creux internes — ceux des virgules, que le modèle expédie en 150 ms là où
- * une voix humaine en prend 400. Allonger un silence est acoustiquement
- * gratuit : on insère des zéros, il n'y a rien à raccorder.
+ * On rogne donc ce silence pour reprendre la main. Le reste — la longueur
+ * des virgules — se décide dans prosody.js, sur le texte, où l'on sait
+ * exactement où sont les virgules.
+ *
+ * Une version antérieure de ce module allongeait aussi les creux INTERNES,
+ * repérés à l'oreille dans le signal. C'était une erreur, et elle s'entendait :
+ * mesuré sur le modèle siwis, un creux de virgule dure 150 à 354 ms et une
+ * pause inter-mot ordinaire va jusqu'à 289 ms. Les deux se recouvrent
+ * entièrement, aucun seuil ne les sépare, et une phrase sans la moindre
+ * virgule se retrouvait hachée par deux silences ajoutés au mauvais endroit.
+ * On ne devine pas dans l'audio ce que le texte dit déjà.
  *
  * Ce module ne connaît ni le lecteur ni le moteur : il ne voit que des
  * échantillons, ce qui le rend testable sans carte son.
  */
 
-/** Seuil de silence. -45 dBFS laisse passer les fins de phrase soufflées. */
-const SEUIL = 10 ** (-45 / 20);
+/**
+ * Seuil de silence.
+ *
+ * -60 dBFS et non -45 : à -45 on coupe la voix. Mesuré sur « Un matin le roi
+ * la surprit », le silence final vaut 70 ms à -45 dBFS mais 30 ms à -60 —
+ * les 40 ms d'écart sont la détente du t final, et la rogner faisait avaler
+ * la fin du mot.
+ */
+const SEUIL = 10 ** (-60 / 20);
 
 /** Fenêtre d'analyse : assez courte pour un plosif, assez longue pour être stable. */
 const FENETRE = 0.005;
@@ -27,15 +41,9 @@ const FENETRE = 0.005;
 const DEFAUTS = {
   sampleRate: 22050,
   /** Silence conservé de part et d'autre, pour ne pas attaquer sec. */
-  garde: 0.015,
+  garde: 0.020,
   /** Fondu aux extrémités : sans lui, la coupe claque. */
   fondu: 0.006,
-  /** Creux à partir duquel on considère une vraie pause, pas une occlusive. */
-  creuxMinimum: 0.13,
-  /** Durée visée pour un creux interne. 0 désactive l'étirement. */
-  creuxVise: 0.42,
-  /** Plafond : au-delà d'une seconde, une pause cesse d'être entendue comme telle. */
-  creuxMaximum: 0.9,
 };
 
 /**
@@ -82,56 +90,6 @@ export function rogner(pcm, options = {}) {
   return debut === 0 && fin === pcm.length ? pcm : pcm.subarray(debut, fin);
 }
 
-/**
- * Rallonge les creux internes jusqu'à la durée visée.
- *
- * Seuls les creux d'au moins `creuxMinimum` sont touchés : en dessous, on
- * tomberait sur la fermeture d'un p, d'un t ou d'un k, et allonger celle-là
- * transformerait « porte » en « por…te ».
- */
-export function etirerCreux(pcm, options = {}) {
-  const opts = { ...DEFAUTS, ...options };
-  const { sampleRate, creuxMinimum, creuxVise, creuxMaximum } = opts;
-  if (!pcm.length || creuxVise <= 0) return pcm;
-
-  const { rms, pas } = energie(pcm, sampleRate);
-
-  // Bornes de la voix : on ne touche pas aux extrémités, qui relèvent du rognage.
-  let premier = 0;
-  while (premier < rms.length && rms[premier] < SEUIL) premier++;
-  if (premier >= rms.length) return pcm;
-  let dernier = rms.length - 1;
-  while (dernier > premier && rms[dernier] < SEUIL) dernier--;
-
-  const creux = [];
-  let debut = -1;
-  for (let f = premier; f <= dernier; f++) {
-    if (rms[f] < SEUIL) { if (debut < 0) debut = f; continue; }
-    if (debut < 0) continue;
-    const duree = ((f - debut) * pas) / sampleRate;
-    if (duree >= creuxMinimum) {
-      const vise = Math.min(Math.max(duree, creuxVise), creuxMaximum);
-      const ajout = Math.round((vise - duree) * sampleRate);
-      if (ajout > 0) creux.push({ a: debut * pas, ajout });
-    }
-    debut = -1;
-  }
-  if (!creux.length) return pcm;
-
-  const total = creux.reduce((s, c) => s + c.ajout, 0);
-  const out = new Float32Array(pcm.length + total);
-  let lu = 0;
-  let ecrit = 0;
-  for (const { a, ajout } of creux) {
-    out.set(pcm.subarray(lu, a), ecrit);
-    ecrit += a - lu;
-    ecrit += ajout;                                  // des zéros, déjà en place
-    lu = a;
-  }
-  out.set(pcm.subarray(lu), ecrit);
-  return out;
-}
-
 /** Fond les extrémités, pour que le raccord ne claque pas. */
 export function fondre(pcm, options = {}) {
   const { sampleRate, fondu } = { ...DEFAUTS, ...options };
@@ -150,14 +108,14 @@ export function fondre(pcm, options = {}) {
 }
 
 /**
- * Chaîne complète : rogner, étirer, fondre.
+ * Chaîne complète : rogner puis fondre.
  * @param {Float32Array} pcm
  * @param {object} options voir DEFAUTS
  * @returns {Float32Array}
  */
 export function mettreEnForme(pcm, options = {}) {
   if (!pcm || !pcm.length) return pcm || new Float32Array(0);
-  return fondre(etirerCreux(rogner(pcm, options), options), options);
+  return fondre(rogner(pcm, options), options);
 }
 
 export const __test__ = { SEUIL, FENETRE, DEFAUTS };

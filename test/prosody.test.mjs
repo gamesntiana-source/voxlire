@@ -18,7 +18,12 @@ test('ne coupe pas sur les civilités et abréviations', () => {
 
 test('ne coupe pas sur « etc. » ni « cf. » en milieu de phrase', () => {
   const r = segment('Des pommes, des poires, etc. sont sur la table. Fin.');
-  assert.equal(r.segments.length, 2);
+  // Le découpage sur virgule peut détacher l'énumération ; ce qui compte
+  // ici est que « etc. » ne termine pas de phrase, donc que le morceau qui
+  // le contient continue jusqu'au vrai point.
+  const avecEtc = r.segments.find((s) => s.text.includes('etc.'));
+  assert.ok(avecEtc.text.endsWith('table.'), avecEtc.text);
+  assert.equal(r.segments.at(-1).text, 'Fin.');
 });
 
 test('ne coupe pas sur les initiales', () => {
@@ -164,7 +169,8 @@ test('un texte très long reste traité en un temps raisonnable', () => {
   const t0 = process.hrtime.bigint();
   const r = segment(book);
   const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-  assert.equal(r.stats.segments, 4000);
+  // Deux segments par phrase : la virgule en détache la proposition.
+  assert.equal(r.stats.segments, 8000);
   assert.ok(ms < 4000, `découpage trop lent : ${ms.toFixed(0)} ms`);
 });
 
@@ -179,4 +185,57 @@ test('isSentenceEnd distingue bien les cas limites', () => {
   assert.equal(isSentenceEnd('M. Dupont', 1), false);
   assert.equal(isSentenceEnd('p. 42 suite', 1), false);
   assert.equal(isSentenceEnd('3.14', 1), false);
+});
+
+// ---------------------------------------------------------------------------
+// Découpage sur la ponctuation interne
+// ---------------------------------------------------------------------------
+
+test('une proposition assez longue se détache sur sa virgule', () => {
+  const r = segment('Il était une fois, dans un pays lointain, un roi très sage.');
+  assert.equal(r.segments.length, 2);
+  // La virgule reste attachée à gauche : c'est elle qui tient l'intonation
+  // suspendue, sans quoi le modèle terminerait la phrase par une chute.
+  assert.ok(r.segments[0].text.endsWith(','), r.segments[0].text);
+  assert.equal(r.segments[0].pauseKind, 'comma');
+  assert.equal(r.segments[1].pauseKind, 'period');
+});
+
+test('les énumérations courtes restent d’un seul tenant', () => {
+  // Quatre fragments d'un mot sonneraient bien plus mécaniques que la pause
+  // imparfaite du modèle.
+  const r = segment('Un, deux, trois, partez !');
+  assert.equal(r.segments.length, 1);
+});
+
+test('le point-virgule et le deux-points découpent aussi', () => {
+  const r = segment('Elle ne répondit pas tout de suite ; elle referma son livre.');
+  assert.equal(r.segments.length, 2);
+  assert.equal(r.segments[0].pauseKind, 'semicolon');
+});
+
+test('la virgule pèse moins qu’un point, plus qu’une coupure forcée', () => {
+  assert.ok(PAUSES.comma < PAUSES.period);
+  assert.ok(PAUSES.comma > PAUSES.soft);
+  // Le rapport d'environ un à deux entre virgule et point est ce qu'on
+  // mesure chez les locuteurs.
+  const rapport = PAUSES.period / PAUSES.comma;
+  assert.ok(rapport > 1.3 && rapport < 2.2, `rapport ${rapport.toFixed(2)}`);
+});
+
+test('on ne respire pas sur une virgule', () => {
+  const long = 'Cette phrase a une longueur tout à fait ordinaire, pour un livre du moins. ';
+  const r = segment(long.repeat(10), { breathEvery: 4 });
+  for (let i = 1; i < r.segments.length; i++) {
+    if (r.segments[i - 1].pauseKind === 'comma') {
+      assert.equal(r.segments[i].breathBefore, false,
+        `respiration après une virgule au segment ${i}`);
+    }
+  }
+});
+
+test('le seuil de découpe sur virgule est réglable', () => {
+  const texte = 'Il faisait très beau, mais le vent se levait déjà.';
+  assert.equal(segment(texte, { minClause: 200 }).segments.length, 1);
+  assert.equal(segment(texte, { minClause: 10 }).segments.length, 2);
 });

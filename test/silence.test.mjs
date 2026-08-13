@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rogner, etirerCreux, fondre, mettreEnForme } from '../src/silence.js';
+import { rogner, fondre, mettreEnForme } from '../src/silence.js';
 
 const SR = 22050;
 
@@ -27,9 +27,9 @@ test('le silence de tête et de queue disparaît', () => {
   const avant = signal([['vide', 0.2], ['son', 0.5], ['vide', 0.25]]);
   const apres = rogner(avant, { sampleRate: SR });
 
-  // Il reste la voix plus la garde de 15 ms de chaque côté.
-  assert.ok(Math.abs(secondes(apres) - (0.5 + 0.03)) < 0.02,
-    `${secondes(apres).toFixed(3)} s au lieu de 0,53`);
+  // Il reste la voix plus la garde de 20 ms de chaque côté.
+  assert.ok(Math.abs(secondes(apres) - 0.54) < 0.02,
+    `${secondes(apres).toFixed(3)} s au lieu de 0,54`);
 });
 
 test('un tampon entièrement silencieux ressort intact', () => {
@@ -51,39 +51,26 @@ test('le rognage ne mord pas sur la voix', () => {
   assert.ok(crete > 0.29, `crête ${crete} : de la voix a été perdue`);
 });
 
-// ---------------------------------------------------------------------------
-
-test('un creux de virgule est rallongé jusqu’à la durée visée', () => {
-  const avant = signal([['son', 0.4], ['vide', 0.18], ['son', 0.4]]);
-  const apres = etirerCreux(avant, { sampleRate: SR, creuxVise: 0.42 });
-  // Le creux de 180 ms doit atteindre 420 ms : 240 ms de plus.
-  assert.ok(Math.abs(secondes(apres) - (secondes(avant) + 0.24)) < 0.02,
-    `${secondes(apres).toFixed(3)} s au lieu de ${(secondes(avant) + 0.24).toFixed(3)}`);
+test('le rognage ne touche pas aux silences internes', () => {
+  // Ils portent la ponctuation de la phrase ; leur longueur se décide sur le
+  // texte, dans prosody.js, et surtout pas à l'oreille dans le signal.
+  const avant = signal([['son', 0.3], ['vide', 0.25], ['son', 0.3]]);
+  const apres = rogner(avant, { sampleRate: SR });
+  assert.ok(Math.abs(secondes(apres) - secondes(avant)) < 1e-9);
 });
 
-test('une occlusive n’est pas prise pour une pause', () => {
-  // La fermeture d'un p, d'un t ou d'un k dure moins de 130 ms. L'allonger
-  // transformerait « porte » en « por…te ».
-  const avant = signal([['son', 0.3], ['vide', 0.07], ['son', 0.3]]);
-  assert.equal(etirerCreux(avant, { sampleRate: SR, creuxVise: 0.42 }), avant);
-});
+test('un son très faible n’est pas pris pour du silence', () => {
+  // À -45 dBFS on coupait la détente des consonnes finales ; le seuil est
+  // à -60 dBFS. Un signal à -50 dBFS doit donc survivre.
+  const n = Math.round(0.3 * SR);
+  const faible = new Float32Array(n);
+  for (let k = 0; k < n; k++) faible[k] = 10 ** (-50 / 20) * Math.sin((2 * Math.PI * 220 * k) / SR);
+  const avant = signal([['vide', 0.2]]);
+  const total = new Float32Array(avant.length + n);
+  total.set(faible, avant.length);
 
-test('l’étirement respecte le plafond', () => {
-  const avant = signal([['son', 0.3], ['vide', 0.5], ['son', 0.3]]);
-  const apres = etirerCreux(avant, { sampleRate: SR, creuxVise: 2, creuxMaximum: 0.9 });
-  assert.ok(Math.abs(secondes(apres) - (secondes(avant) + 0.4)) < 0.02);
-});
-
-test('les silences de bord ne sont pas étirés', () => {
-  // Ils relèvent du rognage ; les toucher ici les compterait deux fois.
-  const avant = signal([['vide', 0.3], ['son', 0.3], ['vide', 0.3]]);
-  assert.equal(etirerCreux(avant, { sampleRate: SR, creuxVise: 0.42 }), avant);
-});
-
-test('plusieurs creux sont traités d’un coup', () => {
-  const avant = signal([['son', 0.3], ['vide', 0.2], ['son', 0.3], ['vide', 0.2], ['son', 0.3]]);
-  const apres = etirerCreux(avant, { sampleRate: SR, creuxVise: 0.42 });
-  assert.ok(Math.abs(secondes(apres) - (secondes(avant) + 0.44)) < 0.03);
+  const apres = rogner(total, { sampleRate: SR });
+  assert.ok(secondes(apres) > 0.28, `${secondes(apres).toFixed(3)} s : le son faible a été rogné`);
 });
 
 // ---------------------------------------------------------------------------
@@ -113,12 +100,12 @@ test('la chaîne complète encaisse les cas vides', () => {
   assert.equal(mettreEnForme(null).length, 0);
 });
 
-test('la chaîne complète raccourcit les bords et rallonge le milieu', () => {
+test('la chaîne complète raccourcit sans jamais rallonger', () => {
   const avant = signal([['vide', 0.2], ['son', 0.4], ['vide', 0.2], ['son', 0.4], ['vide', 0.2]]);
-  const apres = mettreEnForme(avant, { sampleRate: SR, creuxVise: 0.42 });
+  const apres = mettreEnForme(avant, { sampleRate: SR });
 
-  // 0,4 s de silence de bord retirés (garde comprise), 0,22 s ajoutés au milieu.
+  assert.ok(secondes(apres) < secondes(avant), 'les bords doivent être rognés');
+  // Le creux du milieu reste tel quel : on n'ajoute plus rien dans la phrase.
   assert.ok(secondes(apres) > secondes(avant) - 0.4);
-  assert.ok(secondes(apres) < secondes(avant));
   assert.ok(Math.abs(apres[0]) === 0, 'les bords doivent être fondus');
 });

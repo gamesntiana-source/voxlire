@@ -103,6 +103,11 @@ const DEFAULTS = {
   // le lecteur synthétisant de toute façon plusieurs phrases d'avance.
   maxChars: 500,
   minChunk: 80,         // en dessous, un fragment isolé sonne bancal
+  /**
+   * Longueur minimale d'une proposition pour qu'on la détache sur sa
+   * virgule. En dessous, la couper coûterait plus qu'elle ne rapporte.
+   */
+  minClause: 24,
   pauseScale: 1,        // curseur « longueur des pauses » de l'interface
   breaths: true,
   breathEvery: 9.5,     // secondes de parole avant de reprendre son souffle
@@ -242,6 +247,52 @@ function pauseKindFor(mark) {
   return 'period';
 }
 
+/** Type de pause associé à une ponctuation interne. */
+const PONCTUATION_INTERNE = {
+  ',': 'comma', ';': 'semicolon', ':': 'colon', '—': 'dash', '–': 'dash',
+};
+
+/**
+ * Scinde une phrase à ses ponctuations internes.
+ *
+ * On pourrait laisser faire le modèle : il marque bien une pause aux
+ * virgules. Mais elle dure de 150 à 350 ms selon son humeur, là où une voix
+ * humaine en prend 400, et surtout elle est irrégulière — quatre virgules
+ * identiques ont donné 115, 249, 165 et 75 ms. En découpant ici, le silence
+ * se décide dans PAUSES et devient régulier.
+ *
+ * L'intonation ne souffre pas de la coupure : la virgule reste attachée au
+ * morceau de gauche, si bien que le modèle continue de produire une mélodie
+ * suspendue, et non une fin de phrase.
+ *
+ * On ne coupe que si les deux côtés ont de quoi tenir debout. « Un, deux,
+ * trois, partez ! » doit rester d'un seul tenant : quatre fragments d'un mot
+ * sonneraient bien plus mécaniques que la pause imparfaite du modèle.
+ */
+function scinderSurPonctuation(phrase, offset, minClause) {
+  const minReste = Math.round(minClause * 0.6);
+  const parts = [];
+  const re = /\s*([;:,—–])\s+/g;
+  let debut = 0;
+  let m;
+
+  while ((m = re.exec(phrase))) {
+    const coupe = m.index + m[0].length;
+    if (coupe - debut < minClause) continue;
+    if (phrase.length - coupe < minReste) continue;
+
+    parts.push({
+      text: phrase.slice(debut, coupe).trimEnd(),
+      start: offset + debut,
+      breakKind: PONCTUATION_INTERNE[m[1]],
+    });
+    debut = coupe;
+  }
+
+  parts.push({ text: phrase.slice(debut), start: offset + debut, breakKind: null });
+  return parts;
+}
+
 /**
  * Scinde une phrase trop longue en s'appuyant sur la ponctuation forte
  * la plus proche du milieu, pour que la coupure s'entende le moins possible.
@@ -373,7 +424,17 @@ export function segment(rawText, options = {}) {
     // 2. Phrases trop longues -> morceaux bornés.
     for (let s = 0; s < sentences.length; s++) {
       const sent = sentences[s];
-      const parts = splitLong(sent.text, sent.start, opts.maxChars, opts.minChunk);
+
+      // D'abord les propositions, ensuite seulement la longueur : une
+      // coupure sur une virgule s'entend bien mieux qu'une coupure arbitraire.
+      const parts = scinderSurPonctuation(sent.text, sent.start, opts.minClause)
+        .flatMap((clause) => {
+          const morceaux = splitLong(clause.text, clause.start, opts.maxChars, opts.minChunk);
+          // La ponctuation qui ferme la proposition revient à son dernier morceau.
+          morceaux[morceaux.length - 1].breakKind = clause.breakKind;
+          return morceaux;
+        });
+
       const lastSentence = s === sentences.length - 1;
 
       parts.forEach((part, pIdx) => {

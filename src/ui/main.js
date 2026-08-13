@@ -7,7 +7,7 @@
  * texte de façon qu'on sache toujours où en est la voix.
  */
 
-import { segment, PAUSES } from '../prosody.js';
+import { segment } from '../prosody.js';
 import { createPlayer } from '../player.js';
 import { createAudioSink, audioSupported } from '../audio.js';
 import { openEpub } from '../epub.js';
@@ -43,11 +43,6 @@ function duree(secondes) {
   return h
     ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
     : `${m}:${String(r).padStart(2, '0')}`;
-}
-
-/** Durée visée pour une virgule, en secondes, telle que réglée par le curseur. */
-function silencesInternes(pauseScale) {
-  return (PAUSES.comma / 1000) * pauseScale;
 }
 
 function poids(octets) {
@@ -435,12 +430,7 @@ function construirePlayer() {
   etat.player = createPlayer({
     engine: etat.moteur,
     sink: etat.sink,
-    options: {
-      voice: r.voice,
-      rate: r.rate,
-      breathGain: r.breathGain,
-      innerPause: silencesInternes(r.pauseScale),
-    },
+    options: { voice: r.voice, rate: r.rate, breathGain: r.breathGain },
   });
 
   brancherPlayer();
@@ -613,11 +603,9 @@ function brancherInterface() {
   surCurseur('#curseur-volume', 'volume');
   surCurseur('#curseur-taille', 'fontSize');
   surCurseur('#curseur-souffle', 'breathGain', (v) => etat.player?.setBreathGain(v));
-  surCurseur('#curseur-pauses', 'pauseScale', (v) => {
-    // Le curseur agit sur deux plans : les silences ENTRE les phrases, qui se
-    // calculent au découpage, et ceux qui vivent DANS la phrase — les
-    // virgules — qui se taillent dans le son lui-même.
-    etat.player?.setInnerPause(silencesInternes(v));
+  surCurseur('#curseur-pauses', 'pauseScale', () => {
+    // Les silences sont calculés au découpage — virgules comprises, depuis
+    // qu'elles ont leur propre segment : il faut donc le refaire.
     if (etat.livre) {
       const index = Math.max(0, etat.player.current);
       decouper();
