@@ -10,7 +10,11 @@
     "serve": "node scripts/serve.mjs 8000",
     "serve:isolation": "node scripts/serve.mjs 8000 --isolation",
     "icones": "node scripts/faire-icones.mjs",
-    "vendor": "node scripts/vendor.mjs"
+    "vendor": "node scripts/vendor.mjs",
+    "lexique": "node scripts/lexique.mjs"
+  },
+  "devDependencies": {
+    "espeak-ng": "^1.0.2"
   },
   "engines": {
     "node": ">=20"
