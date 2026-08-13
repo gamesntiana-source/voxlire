@@ -34,6 +34,11 @@ const FICHIERS = [
   // fait un fichier de moins à servir et une source d'erreur en moins hors
   // connexion.
   { nom: 'ort.wasm.bundle.min.mjs', octets: 72799 },
+  // La colle Emscripten. Elle paraît superflue avec la variante « bundle »,
+  // qui l'embarque — mais dès qu'on indique un chemin local par wasmPaths,
+  // ONNX Runtime va la rechercher sur disque et échoue sans elle, avec un
+  // « no available backend found » qui ne dit pas son vrai nom.
+  { nom: 'ort-wasm-simd-threaded.mjs', octets: 24180 },
   // Le moteur lui-même. C'est lui qui pèse, et il ne change qu'avec la version.
   { nom: 'ort-wasm-simd-threaded.wasm', octets: 13479978 },
 ];

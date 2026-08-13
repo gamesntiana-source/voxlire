@@ -20,7 +20,7 @@
  */
 
 const VERSION_COQUILLE = 'v7';
-const VERSION_MOTEUR = 'ort1.27.0-lex1';
+const VERSION_MOTEUR = 'ort1.27.0b-lex1';
 
 const CACHE_COQUILLE = `voxlire-coquille-${VERSION_COQUILLE}`;
 const CACHE_MOTEUR = `voxlire-moteur-${VERSION_MOTEUR}`;
@@ -55,6 +55,7 @@ const COQUILLE = [
 const MOTEUR = [
   './src/engines/lexique-data.js',
   './src/vendor/ort/ort.wasm.bundle.min.mjs',
+  './src/vendor/ort/ort-wasm-simd-threaded.mjs',
   './src/vendor/ort/ort-wasm-simd-threaded.wasm',
 ];
 

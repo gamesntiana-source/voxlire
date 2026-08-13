@@ -41,12 +41,15 @@ jobs:
         with:
           node-version: '20'
 
+      # La vendorisation passe AVANT les tests : l'un d'eux ouvre le bundle
+      # d'ONNX Runtime pour verifier que tout ce qu'il reclame a bien ete
+      # recupere. Sans les fichiers sur disque, ce test ne verifierait rien.
+      - name: Vendoriser ONNX Runtime
+        run: npm run vendor
+
       # On ne publie pas ce qui ne passe pas les tests.
       - name: Tests
         run: node --test test/*.test.mjs
-
-      - name: Vendoriser ONNX Runtime
-        run: npm run vendor
 
       # On assemble le site a la main plutot que de televerser le dossier
       # entier : .git, .cache et les scripts n'ont rien a faire en ligne.

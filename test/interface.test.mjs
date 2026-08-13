@@ -90,6 +90,40 @@ test('ce que l’on cache se cache vraiment', () => {
   assert.ok(regleGlobale, 'la règle [hidden] { display: none !important } protège tout le reste');
 });
 
+test('tout fichier vendorisé est aussi mis en cache', () => {
+  const vendor = lire('scripts/vendor.mjs');
+  const sw = lire('sw.js');
+
+  const fichiers = [...vendor.matchAll(/nom: '([^']+)'/g)].map((m) => m[1]);
+  assert.ok(fichiers.length >= 3, 'la liste des fichiers vendorisés n’a pas été trouvée');
+
+  const oublies = fichiers.filter((f) => !sw.includes(f));
+  assert.deepEqual(oublies, [], `vendorisés mais absents du service worker : ${oublies.join(', ')}`);
+});
+
+test('ONNX Runtime trouvera tous les fichiers qu’il réclame', () => {
+  // Le défaut qui a motivé ce test : la variante « bundle » d'ONNX Runtime
+  // embarque sa colle Emscripten, mais dès qu'on lui indique un chemin local
+  // elle va la rechercher sur disque. Faute de l'avoir vendorisée, le moteur
+  // échouait en ligne sur un « no available backend found » qui ne dit pas
+  // son vrai nom. On lit donc dans le bundle lui-même ce qu'il ira chercher.
+  const bundle = 'src/vendor/ort/ort.wasm.bundle.min.mjs';
+  let contenu;
+  try {
+    contenu = lire(bundle);
+  } catch {
+    // src/vendor/ est ignoré par git : sans « npm run vendor », rien à vérifier.
+    return;
+  }
+
+  const reclames = [...new Set([...contenu.matchAll(/ort-wasm[\w.-]*\.(?:mjs|wasm)/g)].map((m) => m[0]))];
+  assert.ok(reclames.length >= 2, 'aucune dépendance détectée dans le bundle');
+
+  const vendorises = new Set([...lire('scripts/vendor.mjs').matchAll(/nom: '([^']+)'/g)].map((m) => m[1]));
+  const manquants = reclames.filter((f) => !vendorises.has(f));
+  assert.deepEqual(manquants, [], `réclamés par ONNX mais non vendorisés : ${manquants.join(', ')}`);
+});
+
 test('le service worker précharge tous les modules du site', () => {
   const sw = lire('sw.js');
   const listes = sw.match(/const (?:COQUILLE|MOTEUR) = \[[^\]]+\]/gs).join('\n');
