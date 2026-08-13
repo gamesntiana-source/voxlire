@@ -19,7 +19,7 @@
  * ne bougez VERSION_MOTEUR que si son contenu a réellement changé.
  */
 
-const VERSION_COQUILLE = 'v7';
+const VERSION_COQUILLE = 'v8';
 const VERSION_MOTEUR = 'ort1.27.0b-lex1';
 
 const CACHE_COQUILLE = `voxlire-coquille-${VERSION_COQUILLE}`;
@@ -107,12 +107,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_COQUILLE);
       const enCache = await cache.match('./index.html');
-      if (enCache) {
-        fetch(request).then((reponse) => {
-          if (reponse.ok) cache.put('./index.html', reponse.clone());
-        }).catch(() => {});
-        return enCache;
-      }
+      if (enCache) return enCache;
       try { return await fetch(request); }
       catch { return new Response('Hors connexion.', { status: 503 }); }
     })());
@@ -138,15 +133,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Le cache d'abord, et RIEN de plus. Une version antérieure rafraîchissait
+  // chaque fichier en arrière-plan « au cas où » : l'application consommait
+  // donc du réseau à chaque ouverture, alors même que tout était déjà là.
+  // C'est inutile — la coquille est versionnée, et une nouvelle version se
+  // préinstalle entièrement à l'activation du service worker.
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_COQUILLE);
     const enCache = await cache.match(request);
+    if (enCache) return enCache;
 
-    const reseau = fetch(request).then((reponse) => {
+    try {
+      const reponse = await fetch(request);
       if (reponse.ok) cache.put(request, reponse.clone());
       return reponse;
-    }).catch(() => null);
-
-    return enCache || (await reseau) || new Response('Indisponible hors connexion.', { status: 503 });
+    } catch {
+      return new Response('Indisponible hors connexion.', { status: 503 });
+    }
   })());
 });

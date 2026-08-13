@@ -50,6 +50,16 @@ export function createAudioSink(opts = {}) {
     now() { return ctx.currentTime; },
 
     /**
+     * Retard entre le moment où un son est programmé et celui où il sort
+     * vraiment du haut-parleur. Sur un téléphone il atteint couramment
+     * 100 à 200 ms — de quoi désynchroniser visiblement le surlignage du
+     * texte si on ne l'ôte pas de l'horloge.
+     */
+    get latency() {
+      return ctx.outputLatency || ctx.baseLatency || 0;
+    },
+
+    /**
      * Programme un bloc de son à un instant absolu de l'horloge audio.
      * @param {Float32Array} pcm mono, dans [-1, 1]
      * @param {number} at instant en secondes sur la même horloge que now()

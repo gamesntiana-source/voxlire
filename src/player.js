@@ -22,7 +22,10 @@ import { mettreEnForme } from './silence.js';
 const DEFAULTS = {
   lookahead: 2.5,   // secondes d'audio d'avance à garder planifiées
   prefetch: 3,      // phrases à synthétiser d'avance
-  tickMs: 120,      // battement de l'ordonnanceur
+  // Battement de l'ordonnanceur. C'est aussi la précision du suivi du texte :
+  // au-delà d'une centaine de millisecondes, l'œil voit le surlignage
+  // décrocher de la voix.
+  tickMs: 80,
   leadIn: 0.12,     // marge avant le tout premier son, pour ne pas le tronquer
   /**
    * Respiration coupée par défaut : le souffle synthétisé s'entend comme un
@@ -115,7 +118,9 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
 
   /** Signale les phrases dont la lecture vient de commencer. */
   function announce() {
-    const now = sink.now();
+    // Ce que l'auditeur entend maintenant a été programmé une latence plus
+    // tôt : on suit l'oreille, pas l'horloge.
+    const now = sink.now() - (sink.latency || 0);
     let changed = false;
     for (const item of scheduled) {
       if (item.at <= now && item.index > announced) {
@@ -218,7 +223,12 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
 
   function startTicking() {
     if (tickId !== null) return;
-    tickId = timer.start(() => { pump(); }, opts.tickMs);
+    // `announce` AVANT `pump`, et surtout en dehors de lui : `pump` rend la
+    // main aussitôt quand une synthèse est déjà en vol, et celle-ci peut
+    // durer deux secondes. Tant que le suivi du texte vivait à l'intérieur,
+    // il restait figé pendant ce temps puis rattrapait d'un bond — le
+    // surlignage était en retard sur la voix à chaque phrase.
+    tickId = timer.start(() => { announce(); pump(); }, opts.tickMs);
   }
 
   function stopTicking() {

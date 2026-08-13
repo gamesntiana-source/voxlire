@@ -360,3 +360,69 @@ test('un auditeur qui plante n’interrompt pas la lecture', async () => {
   await player._pump();
   assert.ok(player.current >= 1);
 });
+
+test('le suivi du texte continue pendant une synthèse longue', async () => {
+  // Le défaut corrigé : `announce` vivait DANS `pump`, lequel rend la main
+  // aussitôt si une synthèse est déjà en vol. Pendant les deux secondes que
+  // peut durer une phrase, le surlignage restait donc figé, puis rattrapait
+  // d'un bond. Il était en retard sur la voix à chaque phrase.
+  let debloquer;
+  const bloquee = new Promise((r) => { debloquer = r; });
+  let appels = 0;
+
+  const sink = fakeSink();
+  const timer = fakeTimer();
+  const engine = {
+    sampleRate: SR,
+    async synthesize(text) {
+      appels += 1;
+      if (appels === 2) await bloquee;      // la deuxième phrase traîne
+      return new Float32Array(Math.round((text.length / 14.5) * SR));
+    },
+  };
+
+  const player = createPlayer({ engine, sink, timer, options: { breathGain: 0 } });
+  player.load(segment(PHRASES));
+
+  const vus = [];
+  player.on('segment', ({ index }) => vus.push(index));
+
+  player.play();
+  await new Promise((r) => { setTimeout(r, 0); });   // laisse la 1re se poser
+
+  assert.ok(sink.played.length >= 1, 'la première phrase devrait être planifiée');
+  assert.deepEqual(vus, [], 'rien ne peut encore être entendu à l’instant zéro');
+
+  // L'horloge avance alors que la synthèse de la deuxième est toujours en vol.
+  sink.advance(1);
+  timer.fn();
+
+  assert.deepEqual(vus, [0], 'la phrase en cours doit être signalée malgré la synthèse');
+  debloquer();
+});
+
+test('le suivi du texte tient compte de la latence de sortie', async () => {
+  // Le son programmé à un instant n'atteint le haut-parleur qu'après la
+  // latence : suivre l'horloge brute ferait surligner avant qu'on entende.
+  const sink = { ...fakeSink(), latency: 0.25 };
+  const timer = fakeTimer();
+  const player = createPlayer({
+    engine: fakeEngine(), sink, timer, options: { breathGain: 0 },
+  });
+  player.load(segment(PHRASES));
+
+  const vus = [];
+  player.on('segment', ({ index }) => vus.push(index));
+  player.play();
+  await player._pump();
+
+  // La première phrase démarre à 0,12 s : à 0,20 s d'horloge, l'oreille n'en
+  // est encore qu'à -0,05 s. Rien ne doit être signalé.
+  sink.advance(0.2);
+  timer.fn();
+  assert.deepEqual(vus, [], 'signalé trop tôt : la latence n’est pas retirée');
+
+  sink.advance(0.4);
+  timer.fn();
+  assert.deepEqual(vus, [0]);
+});

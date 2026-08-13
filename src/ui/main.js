@@ -32,6 +32,7 @@ const etat = {
   spans: [],
   veille: null,         // WakeLockSentinel
   telechargement: null, // progression des voix, ou null quand il n'y a rien en cours
+  persistant: false,    // le navigateur s'engage-t-il à ne pas effacer les voix ?
 };
 
 // ---------------------------------------------------------------------------
@@ -384,10 +385,18 @@ async function afficherPanneauVoix() {
   }
 
   const place = await storageEstimate();
-  if (place) {
-    $('#place-disque').textContent =
-      `Espace utilisé : ${poids(place.usage)} sur ${poids(place.quota)} disponibles.`;
-  }
+  const lignes = [];
+  if (place) lignes.push(`Espace utilisé : ${poids(place.usage)} sur ${poids(place.quota)} disponibles.`);
+
+  // Sans stockage persistant, le navigateur s'autorise à effacer les voix
+  // quand la place vient à manquer — et 295 Mo se retéléchargeraient sans
+  // que personne comprenne pourquoi. Autant que ce soit visible.
+  lignes.push(etat.persistant
+    ? 'Les voix sont protégées : le navigateur ne les effacera pas.'
+    : 'Attention : le navigateur peut effacer les voix s’il manque de place. '
+      + 'Installer Voxlire comme application le lui interdit.');
+
+  $('#place-disque').textContent = lignes.join(' ');
 }
 
 // ---------------------------------------------------------------------------
@@ -484,25 +493,43 @@ async function preparerVoix() {
 // Lecture
 // ---------------------------------------------------------------------------
 
+let preparationEnCours = false;
+
 async function basculerLecture() {
   if (!etat.livre) return;
 
-  if (etat.player.state === 'playing') {
+  if (etat.player?.state === 'playing') {
     etat.player.pause();
     return;
   }
 
-  if (!etat.moteur) {
-    $('#bouton-lecture').disabled = true;
-    const prete = await preparerVoix();
-    $('#bouton-lecture').disabled = false;
-    if (!prete) return;
-    construirePlayer();
-  }
+  // Un second appui pendant la préparation ouvrirait une seconde session
+  // ONNX sur le même modèle de 63 Mo.
+  if (preparationEnCours) return;
 
-  await etat.sink.resume();
-  etat.player.play();
-  garderEcranActif();
+  const bouton = $('#bouton-lecture');
+  try {
+    if (!etat.moteur) {
+      preparationEnCours = true;
+      bouton.disabled = true;
+      if (!(await preparerVoix())) return;
+      construirePlayer();
+    }
+
+    if (!etat.sink) { dire('Ce navigateur ne sait pas produire de son programmé.', 7000); return; }
+
+    await etat.sink.resume();
+    etat.player.play();
+    garderEcranActif();
+  } catch (err) {
+    // Sans ce filet, la moindre erreur laissait le bouton désactivé pour de
+    // bon : l'application paraissait morte, sans rien dire de pourquoi.
+    console.error('Voxlire :', err);
+    dire(`Lecture impossible : ${err.message}`, 8000);
+  } finally {
+    preparationEnCours = false;
+    bouton.disabled = false;
+  }
 }
 
 /** Le lecteur dépend du moteur (fréquence d'échantillonnage) : on le rebâtit. */
@@ -765,7 +792,9 @@ async function demarrer() {
     if (livre) { await ouvrirLivre(livre.id); majMetadonnees(); }
   }
 
-  requestPersistence();
+  // Attendu, et non lancé au vol : le résultat décide de ce qu'on affiche,
+  // et surtout du risque de tout retélécharger un jour.
+  etat.persistant = await requestPersistence().catch(() => false);
 
   surveillerLesMisesAJour();
 
