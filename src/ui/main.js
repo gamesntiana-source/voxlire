@@ -7,7 +7,7 @@
  * texte de façon qu'on sache toujours où en est la voix.
  */
 
-import { segment } from '../prosody.js';
+import { segment, PAUSES } from '../prosody.js';
 import { createPlayer } from '../player.js';
 import { createAudioSink, audioSupported } from '../audio.js';
 import { openEpub } from '../epub.js';
@@ -43,6 +43,11 @@ function duree(secondes) {
   return h
     ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`
     : `${m}:${String(r).padStart(2, '0')}`;
+}
+
+/** Durée visée pour une virgule, en secondes, telle que réglée par le curseur. */
+function silencesInternes(pauseScale) {
+  return (PAUSES.comma / 1000) * pauseScale;
 }
 
 function poids(octets) {
@@ -320,8 +325,16 @@ async function afficherPanneauVoix() {
       action.setAttribute('aria-label', `Supprimer ${v.label}`);
       action.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       action.addEventListener('click', async () => {
+        // Deux voix d'un même paquet sont un seul fichier : on ne peut pas
+        // en retirer une sans l'autre, et l'annoncer après coup serait
+        // désagréable.
+        if (v.compagnes.length
+          && !confirm(`${v.label} et ${v.compagnes.join(', ')} sont le même téléchargement. Les supprimer toutes ?`)) return;
+
         await removeVoice(v.id);
-        dire(`${v.label} supprimée.`);
+        dire(v.compagnes.length
+          ? `${[v.label, ...v.compagnes].join(' et ')} supprimées.`
+          : `${v.label} supprimée.`);
         afficherPanneauVoix();
         remplirChoixVoix();
       });
@@ -335,7 +348,9 @@ async function afficherPanneauVoix() {
           await installVoice(v.id, ({ recu, total }) => {
             jauge.style.width = total ? `${(recu / total) * 100}%` : '100%';
           });
-          dire(`${v.label} est prête, hors connexion.`);
+          dire(v.compagnes.length
+            ? `${[v.label, ...v.compagnes].join(' et ')} sont prêtes, hors connexion.`
+            : `${v.label} est prête, hors connexion.`);
           afficherPanneauVoix();
           remplirChoixVoix();
         } catch (err) {
@@ -420,7 +435,12 @@ function construirePlayer() {
   etat.player = createPlayer({
     engine: etat.moteur,
     sink: etat.sink,
-    options: { voice: r.voice, rate: r.rate, breathGain: r.breathGain },
+    options: {
+      voice: r.voice,
+      rate: r.rate,
+      breathGain: r.breathGain,
+      innerPause: silencesInternes(r.pauseScale),
+    },
   });
 
   brancherPlayer();
@@ -593,8 +613,11 @@ function brancherInterface() {
   surCurseur('#curseur-volume', 'volume');
   surCurseur('#curseur-taille', 'fontSize');
   surCurseur('#curseur-souffle', 'breathGain', (v) => etat.player?.setBreathGain(v));
-  surCurseur('#curseur-pauses', 'pauseScale', () => {
-    // Les silences sont calculés au découpage : il faut le refaire.
+  surCurseur('#curseur-pauses', 'pauseScale', (v) => {
+    // Le curseur agit sur deux plans : les silences ENTRE les phrases, qui se
+    // calculent au découpage, et ceux qui vivent DANS la phrase — les
+    // virgules — qui se taillent dans le son lui-même.
+    etat.player?.setInnerPause(silencesInternes(v));
     if (etat.livre) {
       const index = Math.max(0, etat.player.current);
       decouper();

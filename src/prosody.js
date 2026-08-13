@@ -58,28 +58,54 @@ const ABBREV = new Set([
 // si un chiffre suit (« p. 42 », « n. 3 »).
 const ABBREV_1_CHAR = new Set(['p', 'n', 'v', 'l', 'f', 't', 's']);
 
-/** Durées de silence de référence, en millisecondes, avant mise à l'échelle. */
+/**
+ * Durées de silence de référence, en millisecondes, avant mise à l'échelle.
+ *
+ * Ces valeurs sont le silence RÉELLEMENT entendu : le lecteur rogne d'abord
+ * l'emballage de silence que le modèle ajoute à chaque phrase (voir
+ * silence.js), sans quoi on obtiendrait ces durées plus 270 ms imprévisibles.
+ *
+ * Elles suivent ce qu'on mesure chez les locuteurs : une virgule tient entre
+ * 380 et 670 ms, un point entre 810 et 1240, soit un rapport d'environ un à
+ * deux ; 600 ms est la durée jugée la plus naturelle à l'écoute. Au-delà
+ * d'une seconde, en revanche, un silence cesse d'être entendu comme une
+ * pause et commence à passer pour une hésitation — d'où le plafond posé sur
+ * la fin de paragraphe.
+ */
 export const PAUSES = {
-  paragraph: 900,   // ligne vide : on change de sujet
-  lineBreak: 420,   // simple retour à la ligne
-  ellipsis: 700,    // points de suspension : le silence porte le sens
-  question: 560,
-  exclam: 520,
-  period: 470,
-  colon: 400,       // annonce ce qui suit, donc suspend
-  semicolon: 360,
-  dash: 300,
-  comma: 240,
-  soft: 170,        // coupure sans ponctuation, dans une phrase interminable
+  paragraph: 1000,  // ligne vide : on change de sujet, sans dépasser le plafond
+  lineBreak: 620,   // simple retour à la ligne
+  ellipsis: 800,    // points de suspension : le silence porte le sens
+  question: 700,
+  exclam: 680,
+  period: 680,
+  colon: 520,       // annonce ce qui suit, donc suspend
+  semicolon: 500,
+  dash: 420,
+  comma: 420,
+  soft: 90,         // coupure sans ponctuation : elle doit s'entendre le moins possible
   none: 0,
 };
 
+/**
+ * Une pause s'allonge avec ce qui la précède : après une longue phrase, le
+ * lecteur prend davantage de temps qu'après trois mots. C'est ce qui évite
+ * le rythme au métronome — la variation vient de la structure du texte, pas
+ * d'un tirage au sort.
+ */
+function facteurLongueur(caracteres) {
+  return 0.90 + 0.25 * Math.min(1, caracteres / 180);
+}
+
 const DEFAULTS = {
-  maxChars: 360,        // au-delà, on scinde pour borner la latence
-  minChunk: 60,         // en dessous, un fragment isolé sonne bancal
+  // Scinder une phrase coûte cher : chaque coupure est un trou dans la
+  // mélodie. On repousse donc le seuil aussi loin que la latence le permet,
+  // le lecteur synthétisant de toute façon plusieurs phrases d'avance.
+  maxChars: 500,
+  minChunk: 80,         // en dessous, un fragment isolé sonne bancal
   pauseScale: 1,        // curseur « longueur des pauses » de l'interface
   breaths: true,
-  breathEvery: 11,      // secondes de parole avant de reprendre son souffle
+  breathEvery: 9.5,     // secondes de parole avant de reprendre son souffle
   breathJitter: 3.5,    // variation, pour ne pas respirer au métronome
   charsPerSecond: 14.5, // débit moyen en français, sert à estimer les durées
   simplifyUrls: true,
@@ -357,11 +383,15 @@ export function segment(rawText, options = {}) {
         else if (lastSentence) kind = para.after !== 'none' ? para.after : (sent.kind || 'period');
         else kind = sent.kind || 'period';
 
+        // La longueur s'applique avant le curseur, et le résultat est arrondi
+        // à ce stade : le curseur reste ainsi un multiplicateur exact.
+        const base = Math.round(PAUSES[kind] * facteurLongueur(part.text.length));
+
         segments.push({
           index: segments.length,
           text: part.text,
           pauseKind: kind,
-          pauseAfter: Math.round(PAUSES[kind] * opts.pauseScale),
+          pauseAfter: Math.round(base * opts.pauseScale),
           breathBefore: false,
           breathDepth: 'normal',
           estDuration: part.text.length / opts.charsPerSecond,

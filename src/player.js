@@ -17,6 +17,7 @@
  */
 
 import { makeBreathPCM } from './breath.js';
+import { mettreEnForme } from './silence.js';
 
 const DEFAULTS = {
   lookahead: 2.5,   // secondes d'audio d'avance à garder planifiées
@@ -26,6 +27,13 @@ const DEFAULTS = {
   breathGain: 1,
   rate: 1,
   voice: null,
+  /**
+   * Durée visée pour les silences INTERNES à une phrase — ceux des virgules.
+   * Le modèle les expédie en 150 ms là où une voix humaine en prend 400 ;
+   * sans ce rattrapage, l'oreille ne perçoit même pas la virgule, et la
+   * phrase défile d'un bloc.
+   */
+  innerPause: 0.42,
 };
 
 const defaultTimer = {
@@ -62,6 +70,8 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
   let voice = opts.voice;
   let rate = opts.rate;
   let breathGain = opts.breathGain;
+  let innerPause = opts.innerPause;
+  let finVoix = 0;             // instant où la dernière phrase s'est tue
 
   function emit(name, payload) {
     const set = listeners.get(name);
@@ -85,6 +95,10 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
     const promise = Promise.resolve()
       .then(() => engine.synthesize(seg.text, { voice, rate, index: i }))
       .then((pcm) => (pcm instanceof Float32Array ? pcm : Float32Array.from(pcm || [])))
+      // Le moteur emballe chaque phrase dans une quantité de silence qui lui
+      // appartient et qui varie sans raison. On la retire pour que les
+      // durées décidées par le découpage soient celles qu'on entend.
+      .then((pcm) => mettreEnForme(pcm, { sampleRate: sink.sampleRate, creuxVise: innerPause }))
       .catch((error) => {
         // Une phrase qui refuse de se synthétiser ne doit pas arrêter le livre :
         // on la saute en silence et on le signale.
@@ -165,13 +179,22 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
             sampleRate: sink.sampleRate,
             gain: breathGain,
           });
-          sink.play(breath, at);
-          at += breath.length / sink.sampleRate;
+          const souffle = breath.length / sink.sampleRate;
+
+          // Un lecteur reprend son souffle PENDANT le silence, pas en plus de
+          // lui : ajouter la respiration à la pause donnait des trous de plus
+          // d'une seconde et demie entre deux paragraphes. On la cale donc
+          // pour qu'elle s'achève quand la voix reprend, et on ne repousse la
+          // voix que si la pause est trop courte pour l'accueillir.
+          const debut = Math.max(finVoix, at - souffle, sink.now());
+          if (debut + souffle > at) at = debut + souffle;
+          sink.play(breath, at - souffle);
         }
 
         const speechStart = at;
         if (pcm.length) sink.play(pcm, at);
         at += pcm.length / sink.sampleRate;
+        finVoix = at;
 
         scheduled.push({ index: i, at: speechStart, end: at });
 
@@ -208,6 +231,7 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
     index = Math.max(0, Math.min(i, segments.length));
     announced = index - 1;
     cursor = sink.now() + opts.leadIn;
+    finVoix = sink.now();
   }
 
   return {
@@ -226,6 +250,7 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
       index = 0;
       announced = -1;
       cursor = 0;
+      finVoix = 0;
       state = 'idle';
       emit('state', state);
       return stats;
@@ -300,6 +325,20 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
     },
 
     setBreathGain(g) { breathGain = g; },
+
+    /**
+     * Règle la durée des silences internes — ceux des virgules. Le son mis en
+     * forme est en cache : il faut le refaire, sinon le curseur ne changerait
+     * que les phrases pas encore synthétisées.
+     */
+    setInnerPause(secondes) {
+      if (secondes === innerPause) return;
+      innerPause = secondes;
+      const from = announced >= 0 ? announced : index;
+      const wasPlaying = state === 'playing';
+      resetTo(from);
+      if (wasPlaying) pump();
+    },
 
     get state() { return state; },
     get index() { return index; },
