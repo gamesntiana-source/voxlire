@@ -45,6 +45,11 @@ function duree(secondes) {
     : `${m}:${String(r).padStart(2, '0')}`;
 }
 
+/** « 1× », « 1,15× », « 0,7× » : sans zéro inutile, avec la virgule française. */
+function formatVitesse(rate) {
+  return `${String(Number(rate.toFixed(2))).replace('.', ',')}×`;
+}
+
 function poids(octets) {
   if (octets >= 1e9) return `${(octets / 1e9).toFixed(1)} Go`;
   if (octets >= 1e6) return `${Math.round(octets / 1e6)} Mo`;
@@ -76,6 +81,17 @@ function appliquerReglages() {
   $('#curseur-taille').value = r.fontSize;
 
   $('#valeur-debit').textContent = `${r.rate.toFixed(2).replace('.', ',')}×`;
+
+  // Le bouton du lecteur affiche la vitesse, et se teinte dès qu'elle
+  // s'écarte de la normale : on doit pouvoir s'en apercevoir sans ouvrir
+  // le menu, sinon on cherche longtemps pourquoi la voix court.
+  const boutonVitesse = $('#bouton-vitesse');
+  boutonVitesse.textContent = formatVitesse(r.rate);
+  boutonVitesse.dataset.modifiee = Math.abs(r.rate - 1) < 0.001 ? 'non' : 'oui';
+  $$('#vitesses .vitesse').forEach((b) => {
+    const active = Math.abs(Number(b.dataset.vitesse) - r.rate) < 0.001;
+    b.setAttribute('aria-pressed', String(active));
+  });
   $('#valeur-pauses').textContent = `${r.pauseScale.toFixed(2).replace('.', ',')}×`;
   $('#valeur-souffle').textContent = `${r.breathGain.toFixed(2).replace('.', ',')}×`;
   $('#valeur-volume').textContent = `${Math.round(r.volume * 100)} %`;
@@ -549,6 +565,7 @@ function brancherInterface() {
 
     if (action === 'ouvrir-reglages') { remplirChoixVoix(); ouvrirPanneau('panneau-reglages'); }
     if (action === 'gerer-voix') { afficherPanneauVoix(); ouvrirPanneau('panneau-voix'); }
+    if (action === 'vitesse') ouvrirPanneau('panneau-vitesse');
     if (action === 'fermer-panneau') fermerPanneaux();
     if (action === 'retour') { etat.player?.pause(); document.body.dataset.vue = 'bibliotheque'; afficherBibliotheque(); }
     if (action === 'lecture') basculerLecture();
@@ -559,6 +576,16 @@ function brancherInterface() {
   });
 
   $('#voile').addEventListener('click', fermerPanneaux);
+
+  $('#vitesses').addEventListener('click', (e) => {
+    const choix = e.target.closest('[data-vitesse]');
+    if (!choix) return;
+    etat.reglages.rate = Number(choix.dataset.vitesse);
+    appliquerReglages();
+    // Le lecteur relance la phrase en cours : on entend la nouvelle vitesse
+    // tout de suite, sans attendre la fin du paragraphe.
+    etat.player?.setRate(etat.reglages.rate);
+  });
 
   $('#champ-fichier').addEventListener('change', (e) => {
     const fichier = e.target.files?.[0];

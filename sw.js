@@ -19,7 +19,7 @@
  * ne bougez VERSION_MOTEUR que si son contenu a réellement changé.
  */
 
-const VERSION_COQUILLE = 'v3';
+const VERSION_COQUILLE = 'v4';
 const VERSION_MOTEUR = 'ort1.27.0-lex1';
 
 const CACHE_COQUILLE = `voxlire-coquille-${VERSION_COQUILLE}`;

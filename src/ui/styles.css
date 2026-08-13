@@ -240,7 +240,53 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-variant-numeric: tabular-nums;
 }
 
-.commandes { display: flex; align-items: center; justify-content: center; gap: 26px; }
+/* Trois colonnes plutôt qu'une rangée centrée : le bouton de lecture doit
+   rester au milieu de l'écran quoi qu'on mette à sa gauche. */
+.commandes {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+.transport { display: flex; align-items: center; justify-content: center; gap: 26px; }
+.commandes-cale { width: 56px; }
+
+.bouton-vitesse {
+  justify-self: start;
+  min-width: 56px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--trait);
+  border-radius: 18px;
+  background: transparent;
+  color: var(--texte-doux);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.15s, color 0.15s;
+}
+.bouton-vitesse:active { background: var(--fond-releve); }
+/* Une vitesse autre que la normale se voit d'un coup d'œil. */
+.bouton-vitesse[data-modifiee='oui'] { color: var(--accent); border-color: var(--accent); }
+
+.vitesses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.vitesse {
+  padding: 13px 6px;
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--texte);
+  font-variant-numeric: tabular-nums;
+}
+.vitesse:active { background: var(--fond-releve); }
+.vitesse[aria-pressed='true'] {
+  background: var(--accent-doux);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 .bouton-lecture {
   display: grid;

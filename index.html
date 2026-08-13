@@ -71,16 +71,25 @@
       </div>
     </div>
     <div class="commandes">
-      <button class="bouton-icone" data-action="precedent" aria-label="Phrase précédente">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6v12L9 12zM6 5v14" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-      </button>
-      <button id="bouton-lecture" class="bouton-lecture" data-action="lecture" aria-label="Lire">
-        <svg class="icone-lire" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l12 7-12 7z" fill="currentColor"/></svg>
-        <svg class="icone-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z" fill="currentColor"/></svg>
-      </button>
-      <button class="bouton-icone" data-action="suivant" aria-label="Phrase suivante">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6v12l9-6zM18 5v14" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
-      </button>
+      <button id="bouton-vitesse" class="bouton-vitesse" data-action="vitesse"
+              aria-label="Vitesse de lecture" aria-haspopup="dialog">1×</button>
+
+      <div class="transport">
+        <button class="bouton-icone" data-action="precedent" aria-label="Phrase précédente">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6v12L9 12zM6 5v14" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="bouton-lecture" class="bouton-lecture" data-action="lecture" aria-label="Lire">
+          <svg class="icone-lire" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l12 7-12 7z" fill="currentColor"/></svg>
+          <svg class="icone-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z" fill="currentColor"/></svg>
+        </button>
+        <button class="bouton-icone" data-action="suivant" aria-label="Phrase suivante">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6v12l9-6zM18 5v14" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+
+      <!-- Cale de même largeur que le bouton de vitesse : sans elle, le
+           bouton de lecture ne serait plus au centre de l'écran. -->
+      <span class="commandes-cale" aria-hidden="true"></span>
     </div>
   </footer>
 </section>
@@ -104,11 +113,6 @@
       <select id="choix-voix"></select>
       <p id="etat-voix" class="aide"></p>
       <button class="bouton-secondaire" data-action="gerer-voix">Gérer les voix hors-ligne</button>
-    </div>
-
-    <div class="reglage">
-      <label for="curseur-debit">Débit <output id="valeur-debit">1,00×</output></label>
-      <input type="range" id="curseur-debit" min="0.6" max="1.8" step="0.05" value="1">
     </div>
 
     <div class="reglage">
@@ -147,6 +151,32 @@
   <div class="panneau-corps">
     <p class="aide">Une voix se télécharge une fois, puis fonctionne sans connexion.</p>
     <ul id="liste-voix" class="liste-voix"></ul>
+  </div>
+</aside>
+
+<aside id="panneau-vitesse" class="panneau" hidden aria-label="Vitesse de lecture">
+  <header class="panneau-entete">
+    <h2>Vitesse</h2>
+    <button class="bouton-icone" data-action="fermer-panneau" aria-label="Fermer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+  <div class="panneau-corps">
+    <div id="vitesses" class="vitesses" role="group" aria-label="Vitesses prédéfinies">
+      <button class="vitesse" data-vitesse="0.7">0,7×</button>
+      <button class="vitesse" data-vitesse="0.85">0,85×</button>
+      <button class="vitesse" data-vitesse="1">1×</button>
+      <button class="vitesse" data-vitesse="1.15">1,15×</button>
+      <button class="vitesse" data-vitesse="1.3">1,3×</button>
+      <button class="vitesse" data-vitesse="1.5">1,5×</button>
+      <button class="vitesse" data-vitesse="1.8">1,8×</button>
+    </div>
+
+    <div class="reglage">
+      <label for="curseur-debit">Réglage fin <output id="valeur-debit">1,00×</output></label>
+      <input type="range" id="curseur-debit" min="0.6" max="1.8" step="0.05" value="1">
+      <p class="aide">La voix est resynthétisée : le changement s'entend dès la phrase en cours.</p>
+    </div>
   </div>
 </aside>
 
