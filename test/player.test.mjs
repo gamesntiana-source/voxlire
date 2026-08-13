@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPlayer } from '../src/player.js';
 import { segment } from '../src/prosody.js';
-import { breathDuration } from '../src/breath.js';
 
 const SR = 22050;
 
@@ -109,44 +108,6 @@ test('une question laisse un silence plus long qu’un point', async () => {
 
   const gap = ({ sink }) => sink.played[1].at - (sink.played[0].at + sink.played[0].seconds);
   assert.ok(gap(question) > gap(point));
-});
-
-test('une respiration s’insère juste avant la phrase concernée', async () => {
-  const long = 'Cette phrase a une longueur tout à fait ordinaire pour un livre. ';
-  // La respiration est coupée par défaut : un test qui la vérifie l'allume.
-  const { sink, player } = setup(long.repeat(12), {
-    breathGain: 1,
-    segmentOptions: { breathEvery: 8 },
-  });
-  player.play();
-  await ecouterJusquAuBout(sink, player);
-
-  const respirants = player.segments.filter((s) => s.breathBefore);
-  assert.ok(respirants.length > 0, 'le découpage devrait prévoir des respirations');
-
-  // Une respiration est un tampon court, de la durée exacte du profil.
-  const durees = new Set(['short', 'normal', 'deep'].map(breathDuration));
-  const souffles = sink.played.filter((p) => [...durees].some((d) => Math.abs(p.seconds - d) < 0.01));
-  assert.ok(souffles.length > 0, 'aucun souffle planifié');
-
-  // Chaque souffle est immédiatement suivi d’une phrase, sans silence entre les deux.
-  for (const souffle of souffles) {
-    const suivant = sink.played.find((p) => p.at > souffle.at);
-    assert.ok(suivant, 'un souffle en fin de file');
-    assert.ok(Math.abs(suivant.at - (souffle.at + souffle.seconds)) < 1e-6,
-      'le souffle doit être collé à la phrase qui suit');
-  }
-});
-
-test('on coupe les respirations sans toucher au reste', async () => {
-  const long = 'Cette phrase a une longueur tout à fait ordinaire pour un livre. ';
-  const { sink, player } = setup(long.repeat(12), { breathGain: 0, segmentOptions: { breathEvery: 8 } });
-  player.play();
-  await ecouterJusquAuBout(sink, player);
-
-  const durees = ['short', 'normal', 'deep'].map(breathDuration);
-  const souffles = sink.played.filter((p) => durees.some((d) => Math.abs(p.seconds - d) < 0.01));
-  assert.equal(souffles.length, 0);
 });
 
 test('on ne planifie que l’horizon demandé, pas le livre entier', async () => {

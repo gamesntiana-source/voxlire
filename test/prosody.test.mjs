@@ -108,31 +108,6 @@ test('les adresses e-mail non plus', () => {
   assert.match(r.segments[0].text, /une adresse e-mail/);
 });
 
-test('la respiration arrive après un long passage, jamais au premier segment', () => {
-  const para = 'Cette phrase fait une longueur tout à fait raisonnable pour un test. ';
-  const r = segment(para.repeat(20), { breathEvery: 10 });
-  assert.equal(r.segments[0].breathBefore, false);
-  assert.ok(r.stats.breaths >= 3, `respirations trouvées : ${r.stats.breaths}`);
-});
-
-test('on ne respire pas au milieu d’une phrase coupée', () => {
-  const long = 'Il expliqua longuement, avec une patience remarquable et beaucoup '
-    + 'de détails précis, que la situation était bien plus complexe qu’elle '
-    + 'n’en avait l’air au premier abord pour un observateur pressé.';
-  const r = segment(long.repeat(4), { maxChars: 100, breathEvery: 2 });
-  r.segments.forEach((s, i) => {
-    const prev = r.segments[i - 1];
-    if (prev && ['soft', 'comma', 'dash'].includes(prev.pauseKind)) {
-      assert.equal(s.breathBefore, false, `respiration fautive au segment ${i}`);
-    }
-  });
-});
-
-test('les respirations se coupent à la demande', () => {
-  const r = segment('Phrase assez longue pour respirer. '.repeat(30), { breaths: false });
-  assert.equal(r.stats.breaths, 0);
-});
-
 test('le découpage est reproductible à l’identique', () => {
   const t = 'Une phrase. '.repeat(40);
   assert.deepEqual(segment(t).segments, segment(t).segments);
@@ -221,17 +196,6 @@ test('la virgule pèse moins qu’un point, plus qu’une coupure forcée', () =
   // mesure chez les locuteurs.
   const rapport = PAUSES.period / PAUSES.comma;
   assert.ok(rapport > 1.3 && rapport < 2.2, `rapport ${rapport.toFixed(2)}`);
-});
-
-test('on ne respire pas sur une virgule', () => {
-  const long = 'Cette phrase a une longueur tout à fait ordinaire, pour un livre du moins. ';
-  const r = segment(long.repeat(10), { breathEvery: 4 });
-  for (let i = 1; i < r.segments.length; i++) {
-    if (r.segments[i - 1].pauseKind === 'comma') {
-      assert.equal(r.segments[i].breathBefore, false,
-        `respiration après une virgule au segment ${i}`);
-    }
-  }
 });
 
 test('le seuil de découpe sur virgule est réglable', () => {

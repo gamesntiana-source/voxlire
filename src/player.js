@@ -16,23 +16,22 @@
  * rend l'enchaînement testable sans carte son.
  */
 
-import { makeBreathPCM } from './breath.js';
 import { mettreEnForme } from './silence.js';
 
 const DEFAULTS = {
-  lookahead: 2.5,   // secondes d'audio d'avance à garder planifiées
-  prefetch: 3,      // phrases à synthétiser d'avance
+  /**
+   * Secondes d'audio d'avance à garder planifiées. Généreux à dessein : sur
+   * un téléphone, la synthèse tient à peine le temps réel, et une avance
+   * courte se laisse rattraper au moindre ralentissement — ce qui s'entend
+   * comme une coupure. Dix secondes tiennent dans un mégaoctet.
+   */
+  lookahead: 10,
+  prefetch: 4,      // phrases à synthétiser d'avance
   // Battement de l'ordonnanceur. C'est aussi la précision du suivi du texte :
   // au-delà d'une centaine de millisecondes, l'œil voit le surlignage
   // décrocher de la voix.
   tickMs: 80,
   leadIn: 0.12,     // marge avant le tout premier son, pour ne pas le tronquer
-  /**
-   * Respiration coupée par défaut : le souffle synthétisé s'entend comme un
-   * bruit et non comme une inspiration. Le découpage continue de marquer les
-   * endroits où respirer — il suffit de remonter ce gain pour les entendre.
-   */
-  breathGain: 0,
   rate: 1,
   voice: null,
 };
@@ -70,7 +69,6 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
 
   let voice = opts.voice;
   let rate = opts.rate;
-  let breathGain = opts.breathGain;
   let finVoix = 0;             // instant où la dernière phrase s'est tue
 
   function emit(name, payload) {
@@ -183,22 +181,6 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
         // Jamais dans le passé : après une longue synthèse, l'horloge a avancé.
         let at = Math.max(cursor, sink.now() + opts.leadIn);
 
-        if (seg.breathBefore && breathGain > 0) {
-          const breath = makeBreathPCM(seg.breathDepth, {
-            sampleRate: sink.sampleRate,
-            gain: breathGain,
-          });
-          const souffle = breath.length / sink.sampleRate;
-
-          // Un lecteur reprend son souffle PENDANT le silence, pas en plus de
-          // lui : ajouter la respiration à la pause donnait des trous de plus
-          // d'une seconde et demie entre deux paragraphes. On la cale donc
-          // pour qu'elle s'achève quand la voix reprend, et on ne repousse la
-          // voix que si la pause est trop courte pour l'accueillir.
-          const debut = Math.max(finVoix, at - souffle, sink.now());
-          if (debut + souffle > at) at = debut + souffle;
-          sink.play(breath, at - souffle);
-        }
 
         const speechStart = at;
         if (pcm.length) sink.play(pcm, at);
@@ -337,8 +319,6 @@ export function createPlayer({ engine, sink, timer = defaultTimer, options = {} 
       resetTo(from);
       if (wasPlaying) pump();
     },
-
-    setBreathGain(g) { breathGain = g; },
 
     get state() { return state; },
     get index() { return index; },

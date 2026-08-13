@@ -80,7 +80,6 @@ function appliquerReglages() {
 
   $('#curseur-debit').value = r.rate;
   $('#curseur-pauses').value = r.pauseScale;
-  $('#curseur-souffle').value = r.breathGain;
   $('#curseur-volume').value = r.volume;
   $('#curseur-taille').value = r.fontSize;
 
@@ -97,7 +96,6 @@ function appliquerReglages() {
     b.setAttribute('aria-pressed', String(active));
   });
   $('#valeur-pauses').textContent = `${r.pauseScale.toFixed(2).replace('.', ',')}×`;
-  $('#valeur-souffle').textContent = `${r.breathGain.toFixed(2).replace('.', ',')}×`;
   $('#valeur-volume').textContent = `${Math.round(r.volume * 100)} %`;
   $('#valeur-taille').textContent = `${r.fontSize} px`;
 
@@ -441,8 +439,13 @@ async function installerLesVoixEnFond() {
       afficherTelechargement(p);
 
       // Chaque voix terminée rejoint la liste : autant la rendre choisissable
-      // tout de suite plutôt qu'au bout des 295 Mo.
-      if (p.rang !== rangAffiche) { rangAffiche = p.rang; remplirChoixVoix(); }
+      // tout de suite plutôt qu'au bout des 295 Mo. C'est aussi le moment
+      // d'ouvrir la session, sans attendre les 250 Mo qui restent.
+      if (p.rang !== rangAffiche) {
+        rangAffiche = p.rang;
+        remplirChoixVoix();
+        prechargerLeMoteur();
+      }
     });
     if (echecs.length) dire(`Voix non installées : ${echecs.join(', ')}`, 8000);
   } catch (err) {
@@ -452,6 +455,34 @@ async function installerLesVoixEnFond() {
     afficherTelechargement(null);
     remplirChoixVoix();
     afficherPanneauVoix();
+    prechargerLeMoteur();
+  }
+}
+
+/**
+ * Ouvre la session de synthèse à l'avance, sans que personne l'ait demandé.
+ *
+ * Ouvrir un modèle Piper coûte plusieurs secondes — 6,5 s mesurées en code
+ * natif, davantage en WebAssembly sur un téléphone. Tant que cela se faisait
+ * au premier appui sur Lire, ce délai était compté à l'utilisateur, qui
+ * voyait un bouton sans effet. On le paie donc pendant qu'il choisit son
+ * livre.
+ *
+ * Sans effet si la voix n'est pas encore là, si le moteur est déjà ouvert,
+ * ou si une lecture est en cours — reconstruire le lecteur sous les pieds de
+ * quelqu'un qui écoute serait pire que le délai qu'on économise.
+ */
+async function prechargerLeMoteur() {
+  const id = etat.reglages.voice;
+  if (!id || etat.moteur || etat.player?.state === 'playing') return;
+
+  try {
+    if (!(await voiceStatus(id)).installed) return;
+    etat.moteur = await loadVoice(id);
+    construirePlayer();
+  } catch (err) {
+    // Rien d'urgent : le premier appui sur Lire réessaiera et, lui, préviendra.
+    console.warn('Voxlire : préchargement du moteur impossible', err);
   }
 }
 
@@ -541,7 +572,7 @@ function construirePlayer() {
   etat.player = createPlayer({
     engine: etat.moteur,
     sink: etat.sink,
-    options: { voice: r.voice, rate: r.rate, breathGain: r.breathGain },
+    options: { voice: r.voice, rate: r.rate },
   });
 
   brancherPlayer();
@@ -724,7 +755,6 @@ function brancherInterface() {
   surCurseur('#curseur-debit', 'rate', (v) => etat.player?.setRate(v));
   surCurseur('#curseur-volume', 'volume');
   surCurseur('#curseur-taille', 'fontSize');
-  surCurseur('#curseur-souffle', 'breathGain', (v) => etat.player?.setBreathGain(v));
   surCurseur('#curseur-pauses', 'pauseScale', () => {
     // Les silences sont calculés au découpage — virgules comprises, depuis
     // qu'elles ont leur propre segment : il faut donc le refaire.
@@ -797,6 +827,11 @@ async function demarrer() {
   etat.persistant = await requestPersistence().catch(() => false);
 
   surveillerLesMisesAJour();
+
+  // Si la voix est déjà là — donc à tous les lancements sauf le premier —
+  // la session s'ouvre pendant qu'on choisit son livre, et non au moment
+  // où l'on appuie sur Lire.
+  prechargerLeMoteur();
 
   // Sans attendre : l'application doit rester utilisable pendant que les
   // voix descendent, et la première suffit déjà à lire.

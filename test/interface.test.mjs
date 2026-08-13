@@ -132,7 +132,7 @@ test('le service worker précharge tous les modules du site', () => {
   // Tout module importé par l'interface doit être dans la coquille, sinon il
   // manquera au premier démarrage hors connexion.
   const modules = ['src/ui/main.js', 'src/prosody.js', 'src/player.js',
-    'src/silence.js', 'src/breath.js', 'src/audio.js', 'src/store.js',
+    'src/silence.js', 'src/audio.js', 'src/store.js',
     'src/engines/index.js', 'src/engines/phonemes.js', 'src/engines/lexique-data.js'];
 
   const oublies = modules.filter((m) => !caches.has(m));

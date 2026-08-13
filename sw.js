@@ -19,7 +19,7 @@
  * ne bougez VERSION_MOTEUR que si son contenu a réellement changé.
  */
 
-const VERSION_COQUILLE = 'v8';
+const VERSION_COQUILLE = 'v9';
 const VERSION_MOTEUR = 'ort1.27.0b-lex1';
 
 const CACHE_COQUILLE = `voxlire-coquille-${VERSION_COQUILLE}`;
@@ -33,7 +33,6 @@ const COQUILLE = [
   './src/ui/main.js',
   './src/prosody.js',
   './src/player.js',
-  './src/breath.js',
   './src/silence.js',
   './src/audio.js',
   './src/store.js',

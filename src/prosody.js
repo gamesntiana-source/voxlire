@@ -1,5 +1,5 @@
 /**
- * prosody.js — découpage du texte et placement des silences / respirations.
+ * prosody.js — découpage du texte, silences et ligne mélodique.
  *
  * Principe : l'unité de synthèse est la PHRASE, jamais le fragment.
  * Le moteur neuronal gère déjà l'intonation interne (virgules, questions) ;
@@ -7,7 +7,7 @@
  * Ce module s'occupe donc de ce que le moteur ne sait pas faire :
  *   - reconnaître les vraies fins de phrase (et pas « M. Dupont »),
  *   - doser le silence qui suit selon la ponctuation,
- *   - décider où le lecteur reprend son souffle.
+ *   - donner à chaque phrase sa hauteur, pour ne pas lire d'une seule note.
  */
 
 const NBSP = /[    ⁠]/;
@@ -109,15 +109,12 @@ const DEFAULTS = {
    */
   minClause: 24,
   pauseScale: 1,        // curseur « longueur des pauses » de l'interface
-  breaths: true,
-  breathEvery: 9.5,     // secondes de parole avant de reprendre son souffle
-  breathJitter: 3.5,    // variation, pour ne pas respirer au métronome
   charsPerSecond: 14.5, // débit moyen en français, sert à estimer les durées
   simplifyUrls: true,
   seed: 1,
 };
 
-/** Générateur pseudo-aléatoire déterministe : mêmes respirations à chaque lecture. */
+/** Générateur pseudo-aléatoire déterministe : même lecture à chaque fois. */
 function makeRandom(seed) {
   let s = (seed >>> 0) || 1;
   return () => {
@@ -407,8 +404,8 @@ function placerLaMelodie(segments, rand) {
 /**
  * Découpe un texte en segments prêts à être synthétisés.
  *
- * Chaque segment : { index, text, pauseAfter, pauseKind, breathBefore,
- *                    breathDepth, estDuration, start, end, pitch, tempo }
+ * Chaque segment : { index, text, pauseAfter, pauseKind, estDuration,
+ *                    start, end, pitch, tempo }
  * `pitch` est une transposition en demi-tons et `tempo` un facteur de débit :
  * ensemble ils dessinent la ligne mélodique du paragraphe.
  * `start`/`end` pointent dans le texte NORMALISÉ ; utilise `map` pour
@@ -516,37 +513,11 @@ export function segment(rawText, options = {}) {
           text: part.text,
           pauseKind: kind,
           pauseAfter: Math.round(base * opts.pauseScale),
-          breathBefore: false,
-          breathDepth: 'normal',
           estDuration: part.text.length / opts.charsPerSecond,
           start: part.start,
           end: part.start + part.text.length,
         });
       });
-    }
-  }
-
-  // 3. Respirations : là où un lecteur humain en aurait besoin.
-  if (opts.breaths) {
-    let sinceBreath = 0;
-    let target = opts.breathEvery;
-
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      const prev = segments[i - 1];
-      const newParagraph = prev && (prev.pauseKind === 'paragraph');
-
-      // On ne respire jamais au milieu d'une phrase coupée : ce serait faux.
-      const midSentence = prev && ['soft', 'comma', 'dash'].includes(prev.pauseKind);
-
-      if (i > 0 && !midSentence && (newParagraph || sinceBreath >= target)) {
-        seg.breathBefore = true;
-        seg.breathDepth = newParagraph && sinceBreath > opts.breathEvery ? 'deep'
-          : sinceBreath < opts.breathEvery * 0.6 ? 'short' : 'normal';
-        sinceBreath = 0;
-        target = opts.breathEvery + (rand() * 2 - 1) * opts.breathJitter;
-      }
-      sinceBreath += seg.estDuration + seg.pauseAfter / 1000;
     }
   }
 
@@ -575,7 +546,6 @@ export function segment(rawText, options = {}) {
       segments: segments.length,
       chars: text.length,
       words: (text.match(/[\p{L}\p{N}'’-]+/gu) || []).length,
-      breaths: segments.filter((s) => s.breathBefore).length,
       estDuration: totalSpeech + totalPause,
     },
   };
